@@ -1,5 +1,10 @@
 module End2EndThermalImg
 
-# Write your package code here.
+    include("prepare.jl")
+    include("forward.jl")
+    include("backward.jl")
+    include("prepare.jl")
+    include("optimize.jl")
+    include("process.jl")
 
 end
