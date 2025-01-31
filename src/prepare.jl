@@ -1,4 +1,4 @@
-struct PhysicsHyperParams{FloatType <: AbstractFloat, IntType <: Integer}
+@with_kw struct PhysicsHyperParams{FloatType <: AbstractFloat, IntType <: Integer}
     # bandwidth hyper params
     λlb::FloatType # wavelength lower bound (in units of µm)
     λub::FloatType # wavelength upper bound (in units of µm)
