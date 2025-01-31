@@ -1,11 +1,8 @@
 #!/bin/bash
 
-CORES=40  # Define the number of cores
-SCRIPT_NAME="time_compute_surrogate_model"
-
-#SBATCH --job-name=$SCRIPT_NAME
+#SBATCH --job-name=time_compute_surrogate_model
 #SBATCH --output=logs/log-%j-%x.out
-#SBATCH -c $CORES
+#SBATCH -c 40
 #initialize module command
 source /etc/profile
 
@@ -13,4 +10,4 @@ source /etc/profile
 module load anaconda/2023b
 module load julia/1.10.1  
 
-julia --threads $CORES scripts/${SCRIPT_NAME}.jl
+julia --threads 40 scripts/time_compute_surrogate_model.jl
