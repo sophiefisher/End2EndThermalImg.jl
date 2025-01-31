@@ -10,4 +10,6 @@ source /etc/profile
 module load anaconda/2023b
 module load julia/1.10.1  
 
-julia --threads 40 scripts/time_compute_surrogate_model.jl
+PROJECT_DIR="~/End2EndThermalImg.jl/Project.toml"
+julia --project=${PROJECT_DIR} -e 'using Pkg; Pkg.instantiate()'
+julia --project=${PROJECT_DIR} --threads 40 scripts/time_compute_surrogate_model.jl
