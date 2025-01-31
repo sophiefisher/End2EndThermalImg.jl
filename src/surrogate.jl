@@ -9,6 +9,13 @@ function get_permittivity_function(material)
     end
 end
 
+convert_freq_unitless_to_λ_µm(freq, wavcen) = wavcen / freq
+
+function convert_freq_unitless_to_λ_µm(freq, php::PhysicsHyperParams)
+    wavcen = get_wavcen(php)
+    convert_freq_unitless_to_λ_µm(freq, wavcen)
+end
+
 function get_freq_chebpoints(php::PhysicsHyperParams)
     flb, fub = get_freq_bounds(php)
     # first element in the list is fub, last is flb
