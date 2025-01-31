@@ -13,4 +13,4 @@ source /etc/profile
 module load anaconda/2023b
 module load julia/1.10.1  
 
-julia --threads $CORES ${SCRIPT_NAME}.jl
+julia --threads $CORES scripts/${SCRIPT_NAME}.jl
