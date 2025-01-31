@@ -14,6 +14,7 @@ struct PhysicsHyperParams{FloatType <: AbstractFloat, IntType <: Integer}
     pillar_material::String # material of the pillars
     substrate_height::FloatType # substrate height in z (in units of µm) # TODO: do I still need this anywhere if I assume infinite substrate?
     substrate_material::String # material of the substrate
+    nG::IntType # number of fourier components in RCWA (truncation order)
 end
 
 function get_wavcen(php::PhysicsHyperParams)
