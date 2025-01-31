@@ -35,13 +35,11 @@ function get_transmission(freq, pillar_width, pillar_height, pillar_epsilon, uni
     L1 = pylist([unit_cell_length,0])
     L2 = pylist([0,unit_cell_length])
     N_grid_points = pyint(10000) # number of grid points for the patterned layers
-    
     obj = grcwa.obj(pyint(nG), L1, L2, freq, 0.0, 0.0, verbose = 1 )
     obj.Add_LayerUniform(3.0, substrate_epsilon)
     obj.Add_LayerGrid(pillar_height, N_grid_points, N_grid_points)
     obj.Add_LayerUniform(3.0, 1.0)  
     obj.Init_Setup()
-
     epgrid = numpy.zeros((N_grid_points, N_grid_points))
     boundary = unit_cell_length / 2.0
     xarr = numpy.linspace(-boundary, boundary, N_grid_points)
@@ -49,15 +47,12 @@ function get_transmission(freq, pillar_width, pillar_height, pillar_epsilon, uni
     x, y = numpy.meshgrid(xarr,yarr,indexing=pystr("ij") )
     ind = numpy.logical_and(pyabs(x) < pillar_width / 2.0, pyabs(y) < pillar_width / 2.0)
     epgrid[ind] = pyfloat(1.0)
-
     epgrid = (pillar_epsilon - 1.0) * epgrid + 1.0
     obj.GridLayer_geteps(epgrid.flatten())
-
     obj.a0 = numpy.zeros(2*obj.nG, dtype = pytype(pycomplex(1.0 )))
     obj.a0[0] = pycomplex(1.0)
     obj.bN = numpy.zeros(2*obj.nG, dtype = pytype(pycomplex(1.0 )))
-
-    aN,b0 = obj.GetAmplitudes(2, 0.1)
+    aN, b0 = obj.GetAmplitudes(2, 0.1)
     transmission = aN[0]/obj.a0[0] * numpy.sqrt(numpy.sqrt(substrate_epsilon))
     pyconvert(Complex{Float64}, transmission)
 end
