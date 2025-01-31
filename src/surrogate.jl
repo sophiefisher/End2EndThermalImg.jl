@@ -56,3 +56,40 @@ function get_transmission(freq, pillar_width, pillar_height, pillar_epsilon, uni
     transmission = aN[0]/obj.a0[0] * numpy.sqrt(numpy.sqrt(substrate_epsilon))
     pyconvert(Complex{Float64}, transmission)
 end
+
+# TODO: parallelize
+function compute_surrogate_transmission_matrix(php::PhysicsHyperParams)
+    php_unitless = get_php_unitless(php)
+    @unpack pillar_height, unit_cell_length = php_unitless
+    get_pillar_ϵ = get_permittivity_function(php.pillar_material)
+    get_substrate_ϵ = get_permittivity_function(php.substrate_material)
+    freq_chebpoints = get_freq_chebpoints(php)
+    width_chebpoints = get_width_chebpoints(php)
+
+    transmission_matrix = Matrix{Complex{Float64}}(undef, length(width_chebpoints), length(freq_chebpoints))
+    for (j, freq) in enumerate(freq_chebpoints)
+        for (i, width) in enumerate(width_chebpoints)
+            λ_µm = convert_freq_unitless_to_λ_µm(freq, php)
+            pillar_ϵ = get_pillar_ϵ(λ_µm)
+            substrate_ϵ = get_substrate_ϵ(λ_µm)
+            transmission = get_transmission(freq, width, pillar_height, pillar_ϵ, unit_cell_length, substrate_ϵ, php.nG)
+            transmission_matrix[i, j] = transmission
+        end
+    end
+    transmission_matrix
+end
+
+function get_surrogate_label(php::PhysicsHyperParams)
+    @unpack λlb, λub, f_order = php
+    @unpack unit_cell_length, pillar_width_lb, pillar_width_ub, pillar_width_order, pillar_height  = php
+    @unpack pillar_material, substrate_material, nG = php
+    "surrogate_$(λlb)_$(λub)_$(f_order)_$(unit_cell_length)_$(pillar_width_lb)_$(pillar_width_ub)_$(pillar_width_order)_$(pillar_height)_$(pillar_material)_$(substrate_material)_$(nG)"
+end
+
+get_surrogate_filename(php::PhysicsHyperParams) = "surdata/$(get_surrogate_label(php)).csv"
+
+function compute_and_save_surrogate_transmission_matrix(php::PhysicsHyperParams)
+    transmission_matrix = compute_surrogate_transmission_matrix(php)
+    filename = get_surrogate_filename(php)
+    CSV.write(filename, Tables.table(transmission_matrix) )
+end
