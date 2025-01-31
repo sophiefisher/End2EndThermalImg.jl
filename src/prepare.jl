@@ -18,8 +18,8 @@ struct PhysicsHyperParams{FloatType <: AbstractFloat, IntType <: Integer}
 end
 
 function get_wavcen(php::PhysicsHyperParams)
-    freq_center = ((1/php.λlb) + (1/php.λub))/2
-    round(1 / freq_center,sigdigits=3)
+    freq_center = ((1/php.λlb) + (1/php.λub)) / 2
+    round(1 / freq_center, sigdigits = 3)
 end
 
 function get_freq_bounds(php::PhysicsHyperParams)
