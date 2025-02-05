@@ -67,7 +67,8 @@ function compute_surrogate_transmission_matrix(php::PhysicsHyperParams)
     width_chebpoints = get_width_chebpoints(php)
 
     transmission_matrix = Matrix{Complex{Float64}}(undef, length(freq_chebpoints), length(width_chebpoints))
-    Threads.@threads for (j, width) in enumerate(width_chebpoints)
+    Threads.@threads for j in eachindex(width_chebpoints)
+    width = width_chebpoints[j]
         for (i, freq) in enumerate(freq_chebpoints)
             λ_µm = convert_freq_unitless_to_λ_µm(freq, php)
             pillar_ϵ = get_pillar_ϵ(λ_µm)
