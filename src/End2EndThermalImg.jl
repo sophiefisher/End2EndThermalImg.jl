@@ -14,6 +14,16 @@ module End2EndThermalImg
     using PythonCall
     using Dates
 
+    const grcwa = Ref{Py}()
+    const numpy = Ref{Py}()
+    function __init__()
+        grcwa[] = pyimport("grcwa")
+        numpy[] = pyimport("numpy")
+    end
+
+    export grcwa
+    export numpy
+
     include("prepare.jl")
     include("forward.jl")
     include("backward.jl")
