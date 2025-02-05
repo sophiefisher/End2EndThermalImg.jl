@@ -19,16 +19,16 @@ PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
 
 [compat]
 BenchmarkTools = "1.5.0"
-CSV = "0.10.13"
-CondaPkg = "0.2.22"
-DataFrames = "1.6.1"
+CSV = "0.10.15"
+CondaPkg = "0.2.24"
+DataFrames = "1.7.0"
 DelimitedFiles = "1.9.1"
-Distributions = "0.25.107"
+Distributions = "0.25.113"
 FastChebInterp = "1.2.0"
 Interpolations = "0.15.1"
 Parameters = "0.12.3"
-PyPlot = "2.11.2"
-PythonCall = "0.9.15"
+PyPlot = "2.11.5"
+PythonCall = "0.9.23"
 julia = "1.10.1"
 
 [extras]
