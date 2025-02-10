@@ -67,11 +67,11 @@ function compute_surrogate_transmission_matrix(php::PhysicsHyperParams)
     transmission_matrix = Matrix{Complex{Float64}}(undef, length(freq_chebpoints), length(width_chebpoints))
     PythonCall.GIL.@unlock Threads.@threads for j in eachindex(width_chebpoints)
     width = width_chebpoints[j]
-        for (i, freq) in enumerate(freq_chebpoints)
+        PythonCall.GIL.@lock for (i, freq) in enumerate(freq_chebpoints)
             λ_µm = convert_freq_unitless_to_λ_µm(freq, php)
             pillar_ϵ = get_pillar_ϵ(λ_µm)
             substrate_ϵ = get_substrate_ϵ(λ_µm)
-            PythonCall.GIL.@lock transmission = get_transmission(freq, width, pillar_height, pillar_ϵ, unit_cell_length, substrate_ϵ, php.nG)
+            transmission = get_transmission(freq, width, pillar_height, pillar_ϵ, unit_cell_length, substrate_ϵ, php.nG)
             transmission_matrix[i, j] = transmission
         end
     end
