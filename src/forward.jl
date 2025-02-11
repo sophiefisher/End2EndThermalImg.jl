@@ -45,7 +45,6 @@ function greens(z, freq, ϵ, μ, n2f_size, unit_cell_length)
     [efield(x, y) * -μ / ϵ for x in gridout, y in gridout]
 end
 
-# TODO: is there a way to memoize 
 # assumes incidence from the infinite substrate
 function get_incident_field(php::PhysicsHyperParams, freq::AbstractFloat, z::AbstractFloat)
     get_substrate_ϵ = get_permittivity_function(php.substrate_material)
