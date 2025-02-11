@@ -55,7 +55,6 @@ function get_transmission(freq, pillar_width, pillar_height, pillar_epsilon, uni
     pyconvert(Complex{Float64}, transmission)
 end
 
-# TODO: parallelize
 function compute_surrogate_transmission_matrix(php::PhysicsHyperParams)
     php_unitless = get_php_unitless(php)
     @unpack pillar_height, unit_cell_length = php_unitless
