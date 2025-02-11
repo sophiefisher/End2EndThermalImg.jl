@@ -1,4 +1,4 @@
-function get_permittivity_function(material)
+@memoize function get_permittivity_function(material)
     if material == "Si_no_absorption"
         filepath = "materials/Si_n_Shkondin.csv"
         data = CSV.read(filepath, DataFrame)
