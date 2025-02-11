@@ -13,6 +13,7 @@ module End2EndThermalImg
     using Parameters
     using PythonCall
     using Dates
+    using FFTW
 
     const grcwa = Ref{Py}()
     const numpy = Ref{Py}()
