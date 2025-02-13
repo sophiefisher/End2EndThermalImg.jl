@@ -38,7 +38,7 @@ function greens(z, freq, ϵ, μ, n2f_size, unit_cell_length)
 
     function efield(x, y)
         r = √(x^2 + y^2 + z^2)
-        D * (-1 + k * r * im) * ℯ ^ (k * r * im) / (4 * π * r^3)
+        z * (-1 + k * r * im) * ℯ ^ (k * r * im) / (4 * π * r^3)
     end
 
     gridout = range(-(n2f_size ÷ 2), (n2f_size ÷ 2) - 1, length = n2f_size  ) .* unit_cell_length
