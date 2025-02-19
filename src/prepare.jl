@@ -15,12 +15,14 @@
     substrate_height::FloatType # substrate height in z (in units of µm) # TODO: do I still need this anywhere if I assume infinite substrate?
     substrate_material::String # material of the substrate
     nG::IntType # number of fourier components in RCWA (truncation order)
+
+function get_wavcen(λlb, λub)
+    freq_center = ((1/λlb) + (1/λub)) / 2
+    wavcen = round(1 / freq_center, sigdigits = 3)
+    wavcen
 end
 
-function get_wavcen(php::PhysicsHyperParams)
-    freq_center = ((1/php.λlb) + (1/php.λub)) / 2
-    round(1 / freq_center, sigdigits = 3)
-end
+get_wavcen(php::PhysicsHyperParams) = get_wavcen(php.λlb, php.λub)
 
 function get_freq_bounds(php::PhysicsHyperParams)
     wavcen = get_wavcen(php)
