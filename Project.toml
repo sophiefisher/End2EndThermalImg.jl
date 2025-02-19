@@ -18,7 +18,6 @@ Memoization = "6fafb56a-5788-4b4e-91ca-c0cea6611c73"
 Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
 PyPlot = "d330b81b-6aea-500a-939a-2ce795aea3ee"
 PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
-Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 
 [compat]
 BenchmarkTools = "1.5.0"
