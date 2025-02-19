@@ -1,7 +1,7 @@
 module End2EndThermalImg
 
     # prepare.jl
-    export PhysicsHyperParams
+    export PhysicsHyperParams, ImagingHyperParams, OptimizeHyperParams, ReconstructionHyperParams, JobHyperParams
 
     #surrogate.jl
     export get_transmission
