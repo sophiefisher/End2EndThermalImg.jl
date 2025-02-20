@@ -117,9 +117,7 @@ end
 
 function prepare_geoms(jhp::JobHyperParams)
     geoms_init_type = jhp.opthp.geoms_init_type
-    @unpack num_unit_cells = jhp.php
-    php_unitless = get_php_unitless(jhp.php)
-    @unpack pillar_width_lb, pillar_width_ub = php_unitless
+    @unpack num_unit_cells, pillar_width_lb, pillar_width_ub = jhp.php
     
     if geoms_init_type == "uniform"
         return fill((pillar_width_lb + pillar_width_ub)/2, num_unit_cells, num_unit_cells)

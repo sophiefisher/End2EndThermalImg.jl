@@ -23,9 +23,8 @@ function get_freq_chebpoints(php::PhysicsHyperParams)
 end
 
 function get_width_chebpoints(php::PhysicsHyperParams)
-    php_ul = get_php_unitless(php)
     # first element in the list is ub, last is lb
-    chebpoints(php.pillar_width_order, php_ul.pillar_width_lb, php_ul.pillar_width_ub)
+    chebpoints(php.pillar_width_order, php.pillar_width_lb, php.pillar_width_ub)
 end
 
 function get_transmission(freq, pillar_width, pillar_height, pillar_epsilon, unit_cell_length, substrate_epsilon, nG)
@@ -56,8 +55,7 @@ function get_transmission(freq, pillar_width, pillar_height, pillar_epsilon, uni
 end
 
 function compute_surrogate_transmission_matrix(php::PhysicsHyperParams)
-    php_unitless = get_php_unitless(php)
-    @unpack pillar_height, unit_cell_length = php_unitless
+    @unpack pillar_height, unit_cell_length = php
     get_pillar_ϵ = get_permittivity_function(php.pillar_material)
     get_substrate_ϵ = get_permittivity_function(php.substrate_material)
     freq_chebpoints = get_freq_chebpoints(php)
