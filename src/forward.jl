@@ -31,7 +31,7 @@ function incident_field(z, freq, n, num_unit_cells, unit_cell_length)
     incident
 end
 
-# TODO: implement absolute units for the green's functions
+# TODO: implement absolute scaling factor for the green's functions
 function greens(z, freq, ϵ, μ, n2f_size, unit_cell_length)
     ω = 2 * π * freq
     n = √(ϵ*μ)
