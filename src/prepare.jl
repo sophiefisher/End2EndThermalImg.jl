@@ -99,19 +99,14 @@ end
     rechp::ReconstructionHyperParams
 end
 
-function get_wavcen(λlb, λub)
-    freq_center = ((1/λlb) + (1/λub)) / 2
+function get_wavcen(λlb_μm, λub_μm)
+    freq_center = ((1/λlb_μm) + (1/λub_μm)) / 2
     wavcen = round(1 / freq_center, sigdigits = 3)
     wavcen
 end
 
 
-function get_freq_bounds(php::PhysicsHyperParams)
-    wavcen = get_wavcen(php)
-    flb = wavcen / php.λub
-    fub = wavcen / php.λlb
-    (; flb, fub)
-end
+get_wavcen(php::PhysicsHyperParams) = get_wavcen(php.λlb_μm, php.λub_μm)
 
 
 function prepare_geoms(jhp::JobHyperParams)
