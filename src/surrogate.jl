@@ -75,10 +75,10 @@ function compute_surrogate_transmission_matrix(php::PhysicsHyperParams)
 end
 
 function get_surrogate_label(php::PhysicsHyperParams)
-    @unpack λlb, λub, f_order = php
-    @unpack unit_cell_length, pillar_width_lb, pillar_width_ub, pillar_width_order, pillar_height  = php
+    @unpack λlb_μm, λub_μm, freq_order = php
+    @unpack unit_cell_length_μm, pillar_width_lb_μm, pillar_width_ub_μm, pillar_width_order, pillar_height_μm  = php
     @unpack pillar_material, substrate_material, nG = php
-    "surrogate_$(λlb)_$(λub)_$(f_order)_$(unit_cell_length)_$(pillar_width_lb)_$(pillar_width_ub)_$(pillar_width_order)_$(pillar_height)_$(pillar_material)_$(substrate_material)_$(nG)"
+    "surrogate_$(λlb_μm)_$(λub_μm)_$(freq_order)_$(unit_cell_length_μm)_$(pillar_width_lb_μm)_$(pillar_width_ub_μm)_$(pillar_width_order)_$(pillar_height_μm)_$(pillar_material)_$(substrate_material)_$(nG)"
 end
 
 get_surrogate_filename(php::PhysicsHyperParams) = "surdata/$(get_surrogate_label(php)).csv"
