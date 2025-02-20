@@ -105,7 +105,6 @@ function get_wavcen(λlb, λub)
     wavcen
 end
 
-get_wavcen(php::PhysicsHyperParams) = get_wavcen(php.λlb, php.λub)
 
 function get_freq_bounds(php::PhysicsHyperParams)
     wavcen = get_wavcen(php)

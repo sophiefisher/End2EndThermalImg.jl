@@ -17,9 +17,8 @@ function convert_freq_unitless_to_λ_µm(freq, php::PhysicsHyperParams)
 end
 
 function get_freq_chebpoints(php::PhysicsHyperParams)
-    flb, fub = get_freq_bounds(php)
     # first element in the list is fub, last is flb
-    chebpoints(php.f_order, flb, fub) 
+    chebpoints(php.freq_order, php.freqlb, php.frequb) 
 end
 
 function get_width_chebpoints(php::PhysicsHyperParams)
