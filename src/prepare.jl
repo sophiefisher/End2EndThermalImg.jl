@@ -48,6 +48,8 @@ function PhysicsHyperParams(;
     wavcen = get_wavcen(λlb_μm, λub_μm)
     λlb = λlb_μm / wavcen
     λub = λub_μm / wavcen
+    freqlb = 1 / λub
+    frequb = 1 / λlb
     focal_length = focal_length_μm / wavcen
     unit_cell_length = unit_cell_length_μm / wavcen
     pillar_width_lb = pillar_width_lb_μm / wavcen
@@ -71,6 +73,8 @@ function PhysicsHyperParams(;
         nG,
         λlb,
         λub,
+        freqlb,
+        frequb,
         focal_length,
         unit_cell_length,
         pillar_width_lb,
