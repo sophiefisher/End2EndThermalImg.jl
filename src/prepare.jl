@@ -111,9 +111,7 @@ function get_wavcen(λlb_μm, λub_μm)
     wavcen
 end
 
-
 get_wavcen(php::PhysicsHyperParams) = get_wavcen(php.λlb_μm, php.λub_μm)
-
 
 function prepare_geoms(jhp::JobHyperParams)
     geoms_init_type = jhp.opthp.geoms_init_type
