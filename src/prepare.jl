@@ -32,7 +32,7 @@ end
 function PhysicsHyperParams(; 
     λlb_μm::FloatType,
     λub_μm::FloatType,
-    f_order::IntType,
+    freq_order::IntType,
     focal_length_μm::FloatType,
     num_unit_cells::IntType,
     unit_cell_length_μm::FloatType,
@@ -57,7 +57,7 @@ function PhysicsHyperParams(;
     return PhysicsHyperParams{FloatType, IntType}(
         λlb_μm,
         λub_μm,
-        f_order,
+        freq_order,
         focal_length_μm,
         num_unit_cells,
         unit_cell_length_μm,
