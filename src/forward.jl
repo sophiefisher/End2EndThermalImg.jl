@@ -33,7 +33,7 @@ end
 
 # TODO: implement absolute units for the green's functions
 function greens(z, freq, ϵ, μ, n2f_size, unit_cell_length)
-    ω = convert(typeof(f),2) * π * freq
+    ω = 2 * π * freq
     n = √(ϵ*μ)
     k = n * ω
 
