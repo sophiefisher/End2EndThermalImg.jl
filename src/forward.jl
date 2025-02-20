@@ -51,6 +51,6 @@ function get_incident_field(php::PhysicsHyperParams, freq::AbstractFloat, z::Abs
     get_substrate_ϵ = get_permittivity_function(php.substrate_material)
     λ_µm = convert_freq_unitless_to_λ_µm(freq, php)
     substrate_ϵ = get_substrate_ϵ(λ_µm)
-    incident = incident_field(z, freq, √(substrate_ϵ), pp.num_unit_cells, pp.unit_cell_length)
+    incident = incident_field(z, freq, √(substrate_ϵ), php.num_unit_cells, php.unit_cell_length)
     incident
 end
