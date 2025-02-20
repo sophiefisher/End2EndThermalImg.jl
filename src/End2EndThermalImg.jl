@@ -2,7 +2,8 @@ module End2EndThermalImg
 
     # prepare.jl
     export PhysicsHyperParams, ImagingHyperParams, OptimizeHyperParams, ReconstructionHyperParams, JobHyperParams
-
+    export get_wavcen
+    
     #surrogate.jl
     export get_transmission
 
