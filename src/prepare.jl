@@ -2,7 +2,7 @@ struct PhysicsHyperParams{FloatType <: AbstractFloat, IntType <: Integer}
     # bandwidth hyper params
     λlb_μm::FloatType # wavelength lower bound (in units of µm)
     λub_μm::FloatType # wavelength upper bound (in units of µm)
-    f_order::IntType # order of Chebyshev polynomial in the frequency; number of points is f_order + 1
+    freq_order::IntType # order of Chebyshev polynomial in the frequency; number of points is freq_order + 1
     # geometry and material hyper params
     focal_length_μm::FloatType # focal length (in units of µm)
     num_unit_cells::IntType # number of unit cells on one side of the square metasurface (total number of unit cells is num_unit_cells^2)
