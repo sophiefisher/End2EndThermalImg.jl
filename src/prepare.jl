@@ -16,15 +16,17 @@ struct PhysicsHyperParams{FloatType <: AbstractFloat, IntType <: Integer}
     substrate_material::String # material of the substrate
     nG::IntType # number of fourier components in RCWA (truncation order)
 
-    # Computed unitless parameters
-    λlb::FloatType # wavelength lower bound (unitless, normalized by λ correponding to center freq)
-    λub::FloatType # wavelength upper bound (unitless, normalized by λ correponding to center freq)
-    focal_length::FloatType # focal length (unitless, normalized by λ correponding to center freq)
-    unit_cell_length::FloatType # side length of each square unit cell (unitless, normalized by λ correponding to center freq)
-    pillar_width_lb::FloatType # square pillar width lower bound (unitless, normalized by λ correponding to center freq)
-    pillar_width_ub::FloatType # square pillar width upper bound (unitless, normalized by λ correponding to center freq)
-    pillar_height::FloatType # square pillar height in z (unitless, normalized by λ correponding to center freq)
-    substrate_height::FloatType # substrate height in z (unitless, normalized by λ correponding to center freq)
+    # Computed unitless parameters, normalized by λ correponding to center freq
+    λlb::FloatType # wavelength lower bound 
+    λub::FloatType # wavelength upper bound 
+    freqlb::FloatType # frequency lower bound 
+    frequb::FloatType # frequency upper bound
+    focal_length::FloatType # focal length 
+    unit_cell_length::FloatType # side length of each square unit cell 
+    pillar_width_lb::FloatType # square pillar width lower bound 
+    pillar_width_ub::FloatType # square pillar width upper bound 
+    pillar_height::FloatType # square pillar height in z 
+    substrate_height::FloatType # substrate height in z
 end
 
 function PhysicsHyperParams(; 
