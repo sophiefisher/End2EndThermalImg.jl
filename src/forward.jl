@@ -31,6 +31,7 @@ function incident_field(z, freq, n, num_unit_cells, unit_cell_length)
     incident
 end
 
+# TODO: implement absolute units for the green's functions
 function greens(z, freq, ϵ, μ, n2f_size, unit_cell_length)
     ω = convert(typeof(f),2) * π * freq
     n = √(ϵ*μ)
