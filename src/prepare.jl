@@ -114,18 +114,6 @@ function get_freq_bounds(php::PhysicsHyperParams)
     (; flb, fub)
 end
 
-function get_php_unitless(php::PhysicsHyperParams)
-    wavcen = get_wavcen(php)
-    flb, fub = get_freq_bounds(php)
-    focal_length = php.focal_length / wavcen
-    unit_cell_length = php.unit_cell_length / wavcen
-    pillar_width_lb = php.pillar_width_lb / wavcen
-    pillar_width_ub = php.pillar_width_ub / wavcen
-    pillar_height = php.pillar_height / wavcen
-    substrate_height = php.substrate_height / wavcen
-    (; flb, fub, focal_length, unit_cell_length, pillar_width_lb, 
-    pillar_width_ub, pillar_height, substrate_height)
-end
 
 function prepare_geoms(jhp::JobHyperParams)
     geoms_init_type = jhp.opthp.geoms_init_type
