@@ -89,3 +89,15 @@ function compute_and_save_surrogate_transmission_matrix(php::PhysicsHyperParams)
     filename = get_surrogate_filename(php)
     CSV.write(filename, Tables.table(transmission_matrix) )
 end
+
+# one for each frequency
+function load_surrogate_models(php::PhysicsHyperParams)
+    filepath = get_surrogate_filename(php)
+    if isfile(filepath)
+        transmission_matrix = CSV.read(filepath, DataFrame, types=Complex{Float64})
+        return [chebinterp(collect(transmission_matrix[i,:]), php.pillar_width_lb, php.pillar_width_ub) for i in 1:php.freq_order + 1]
+    else
+        error("file does not exist: surrogate models have not yet been computed and saved")
+    end
+end
+
