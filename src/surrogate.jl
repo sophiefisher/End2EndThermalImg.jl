@@ -130,7 +130,7 @@ function plot_surrogate_models(php::PhysicsHyperParams)
         title(L"f = %$freq")
     end
     tight_layout()
-    plotclose()
     savefig("plots/$(surrogate_label)_$(datetime).png")
+    plotclose()
     return nothing
 end
