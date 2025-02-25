@@ -1,4 +1,5 @@
 [deps]
+matplotlib = ""
 numpy = ""
 
 [pip.deps]
