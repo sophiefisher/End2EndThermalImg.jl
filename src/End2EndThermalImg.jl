@@ -6,6 +6,7 @@ module End2EndThermalImg
     
     #surrogate.jl
     export get_transmission
+    export compute_and_save_surrogate_transmission_matrix
 
     using CSV
     using DataFrames
