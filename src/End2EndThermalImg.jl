@@ -16,6 +16,9 @@ module End2EndThermalImg
     using Dates
     using FFTW
     using Memoization
+    using FastChebInterp
+    using PythonPlot
+    using LaTeXStrings
 
     const grcwa = Ref{Py}()
     const numpy = Ref{Py}()
