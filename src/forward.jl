@@ -5,6 +5,7 @@ Convolves an inpL x inpL array with the FFT of a centered kernel
 of size kerL x kerL to produce an output of size (kerL - inpL) x (kerL - inpL).
 
 """
+# TODO: why does this assume the kernel is already fourier transformed?
 function convolve(inp, kernel)
     # inpL < kerL
     inpL = size(inp)[1]
