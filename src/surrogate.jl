@@ -74,6 +74,7 @@ function compute_surrogate_transmission_matrix(php::PhysicsHyperParams)
     transmission_matrix
 end
 
+# surrogate is labeled with unitful quantities, but computes models for unitless quantities
 function get_surrogate_label(php::PhysicsHyperParams)
     @unpack λlb_μm, λub_μm, freq_order = php
     @unpack unit_cell_length_μm, pillar_width_lb_μm, pillar_width_ub_μm, pillar_width_order, pillar_height_μm  = php
