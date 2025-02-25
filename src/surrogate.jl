@@ -101,3 +101,36 @@ function load_surrogate_models(php::PhysicsHyperParams)
     end
 end
 
+function plot_surrogate_models(php::PhysicsHyperParams)
+    datetime = now()
+    surrogates = load_surrogate_models(php)
+    surrogate_label = get_surrogate_label(php)
+    freq_chebpoints = get_freq_chebpoints(php)
+    width_chebpoints = get_width_chebpoints(php)
+    widths_linear = LinRange(php.pillar_width_lb, php.pillar_width_ub, 1000)
+    f = figure(figsize=(8, 2.5*(php.freq_order+1) ))
+    for i in eachindex(freq_chebpoints)
+        freq = freq_chebpoints[i]
+        surrogate_vals_linear = surrogates[i].(widths_linear)
+        surrogate_vals_chebpoints = surrogates[i].(width_chebpoints)
+        subplot(php.freq_order+1, 2, i*2 - 1)
+        plot(widths_linear, mod.(angle.(surrogate_vals_linear),2*pi)/(2*pi), color = "tab:blue")
+        plot(width_chebpoints, mod.(angle.(surrogate_vals_chebpoints),2*pi)/(2*pi), color = "tab:blue", ".")
+        xlabel("Pillar width (unitless)")
+        ylim([0,1])
+        ylabel(L"\angle t / 2\pi")
+        title(L"f = %$freq")
+
+        subplot(php.freq_order+1, 2, i*2 )
+        plot(widths_linear, abs.(surrogate_vals_linear).^2, color = "tab:orange")
+        plot(width_chebpoints, abs.(surrogate_vals_chebpoints).^2, color = "tab:orange", ".")
+        xlabel("Pillar width (unitless)")
+        ylim([0,1])
+        ylabel(L"|t^2|")
+        title(L"f = %$freq")
+    end
+    tight_layout()
+    plotclose()
+    savefig("plots/$(surrogate_label)_$(datetime).png")
+    return nothing
+end
