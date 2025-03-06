@@ -53,32 +53,32 @@ function n2f_kernel(z, freq, ϵ, μ, n2f_size, unit_cell_length)
     fft([efield(x, y) * -μ / ϵ for x in gridout, y in gridout])
 end
 
-function get_n2f_kernel(num_unit_cells, unit_cell_length, psfL, binL, freq, z)
+function get_n2f_kernel(num_unit_cells, unit_cell_length, psfN, binN, freq, z)
     # TODO: this might change when i implement image sampling
-    n2f_size = num_unit_cells + binL*psfL
+    n2f_size = num_unit_cells + binN*psfN
     n2f_kernel(z, freq, 1.0, 1.0, n2f_size, unit_cell_length)
 end
 
 function get_n2f_kernel(jhp::JobHyperParams, freq, z)
     php, imghp = jhp.php, jhp.imghp
     @unpack num_unit_cells, unit_cell_length = php
-    @unpack objL, imgL, binL = imghp
-    psfL = (objL + imgL)
-    get_n2f_kernel(num_unit_cells, unit_cell_length, psfL, binL, freq, z)
+    @unpack objN, imgN, binN = imghp
+    psfN = (objN + imgN)
+    get_n2f_kernel(num_unit_cells, unit_cell_length, psfN, binN, freq, z)
 end
 
 function near_to_far_field(near_field, n2f_kernel)
     far = convolve(near_field, n2f_kernel)
 end
 
-function far_field_to_PSF(far_field, binL, freq)
-    psfL = size(far_field)[1] ÷ binL
-    far_field_reshaped = reshape(far_field, (binL, psfL, binL, psfL))
+function far_field_to_PSF(far_field, binN, freq)
+    psfN = size(far_field)[1] ÷ binN
+    far_field_reshaped = reshape(far_field, (binN, psfN, binN, psfN))
     far_field_reshaped_abs = (abs.(far_field_reshaped)).^2
     far_field_binned = sum(far_field_reshaped_abs, dims=(1, 3))
     PSF = dropdims(far_field_binned, dims=(1,3)) ./ freq 
 end
 
 function far_field_to_PSF(far_field, imghp::ImagingHyperParams, freq)
-    far_field_to_PSF(far_field, imghp.binL, freq)
+    far_field_to_PSF(far_field, imghp.binN, freq)
 end

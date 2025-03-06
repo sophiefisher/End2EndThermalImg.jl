@@ -85,9 +85,10 @@ function PhysicsHyperParams(;
 end
 
 @with_kw struct ImagingHyperParams{IntType <: Integer}
-    objL::IntType # number of object pixels in the x and y directions 
-    imgL::IntType # number of image pixels in the x and y directions
-    binL::IntType # how much to bin each sensor pixel (binL x binL subpixels)
+    objN::IntType # number of object pixels in the x and y directions 
+    imgN::IntType # number of image pixels in the x and y directions
+    binN::IntType # how much to bin each sensor pixel (binN x binN subpixels)
+    sampleN::IntType # how many points to sample per subpixel
 end
 
 @with_kw struct OptimizeHyperParams
