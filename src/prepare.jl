@@ -88,7 +88,7 @@ end
     objN::IntType # number of object pixels in the x and y directions 
     imgN::IntType # number of image pixels in the x and y directions
     binN::IntType # how much to bin each sensor pixel (binN x binN subpixels)
-    sampleN::IntType # how many points to sample per subpixel
+    sampleN::IntType # how many points to sample per subpixel (which has length unit_cell_length, i.e. the metasurface unit cell length)
 end
 
 @with_kw struct OptimizeHyperParams
