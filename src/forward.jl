@@ -18,7 +18,7 @@ function convolve(inp, kernel)
     out
 end
 
-function incident_field(z, freq, n, num_unit_cells, unit_cell_length)
+function incident_field(freq, z, n, num_unit_cells, unit_cell_length)
     ω = 2 * π * freq
     k = n * ω
 
@@ -32,11 +32,11 @@ function incident_field(z, freq, n, num_unit_cells, unit_cell_length)
     incident
 end
 
-function get_incident_field(php::PhysicsHyperParams, freq::AbstractFloat, z::AbstractFloat)
+function get_incident_field(freq, z, php::PhysicsHyperParams)
     get_substrate_ϵ = get_permittivity_function(php.substrate_material)
     λ_µm = convert_freq_unitless_to_λ_µm(freq, php)
     substrate_ϵ = get_substrate_ϵ(λ_µm)
-    incident = incident_field(z, freq, √(substrate_ϵ), php.num_unit_cells, php.unit_cell_length)
+    incident = incident_field(freq, z, √(substrate_ϵ), php.num_unit_cells, php.unit_cell_length)
     incident
 end
 
@@ -90,8 +90,6 @@ function far_field_to_PSF(far_field, freq, unit_cell_length, binN, sampleN)
     far_field_abs_integrated = reshape(far_field_abs, (sampleN * binN, psfN, sampleN * binN, psfN))
     far_field_abs_integrated = sum(far_field_abs_integrated, dims=(1, 3)) 
     # (unit_cell_length / sampleN) is the integration/sampling width for integrating over each subpixel
-    # divide by freq to turn energy into photon constructor
-    # TODO: to normalize correctly, also need to divide by factor of hbar here
     PSF = dropdims(far_field_abs_integrated, dims=(1, 3)) .* (unit_cell_length / sampleN) ./ freq 
 end
 
