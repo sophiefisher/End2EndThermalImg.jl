@@ -40,14 +40,19 @@ function get_incident_field(php::PhysicsHyperParams, freq::AbstractFloat, z::Abs
     incident
 end
 
-function get_near_field(incident_field, surrogate, geoms)
+function get_near_field(incident_field, surrogate, geoms, sampleN)
     near = incident_field .* surrogate.(geoms)
-    near
+    near = repeat(near, inner=(sampleN, sampleN))
+end
+
+function get_near_field(incident_field, surrogate, geoms, imghp::ImagingHyperParams)
+    near = incident_field .* surrogate.(geoms)
+    near = repeat(near, inner=(imghp.sampleN, imghp.sampleN))
 end
 
 # TODO: implement absolute scaling factor for the green's functions
 # TODO: this might change when i implement image sampling
-function n2f_kernel(z, freq, ϵ, μ, n2f_size, unit_cell_length)
+function n2f_kernel(freq, z, ϵ, μ, n2f_size, unit_cell_length, sampleN)
     ω = 2 * π * freq
     n = √(ϵ*μ)
     k = n * ω
@@ -57,36 +62,39 @@ function n2f_kernel(z, freq, ϵ, μ, n2f_size, unit_cell_length)
         z * (-1 + k * r * im) * ℯ ^ (k * r * im) / (4 * π * r^3)
     end
 
-    gridout = range(-(n2f_size ÷ 2), (n2f_size ÷ 2) - 1, length = n2f_size  ) .* unit_cell_length
+    gridout = range(-(n2f_size ÷ 2), (n2f_size ÷ 2) - 1, length = n2f_size  ) .* (unit_cell_length / sampleN)
     fft([efield(x, y) * -μ / ϵ for x in gridout, y in gridout])
 end
 
-function get_n2f_kernel(num_unit_cells, unit_cell_length, psfN, binN, freq, z)
+function get_n2f_kernel(freq, z, num_unit_cells, unit_cell_length, psfN, binN, sampleN)
     # TODO: this might change when i implement image sampling
-    n2f_size = num_unit_cells + binN*psfN
-    n2f_kernel(z, freq, 1.0, 1.0, n2f_size, unit_cell_length)
+    n2f_size = (num_unit_cells + binN*psfN)*sampleN
+    n2f_kernel(freq, z, 1.0, 1.0, n2f_size, unit_cell_length, sampleN)
 end
 
-function get_n2f_kernel(jhp::JobHyperParams, freq, z)
+function get_n2f_kernel(freq, z, jhp::JobHyperParams)
     php, imghp = jhp.php, jhp.imghp
     @unpack num_unit_cells, unit_cell_length = php
-    @unpack objN, imgN, binN = imghp
+    @unpack objN, imgN, binN, sampleN = imghp
     psfN = (objN + imgN)
-    get_n2f_kernel(num_unit_cells, unit_cell_length, psfN, binN, freq, z)
+    get_n2f_kernel(freq, z, num_unit_cells, unit_cell_length, psfN, binN, sampleN)
 end
 
 function near_to_far_field(near_field, n2f_kernel)
     far = convolve(near_field, n2f_kernel)
 end
 
-function far_field_to_PSF(far_field, binN, freq)
-    psfN = size(far_field)[1] ÷ binN
-    far_field_reshaped = reshape(far_field, (binN, psfN, binN, psfN))
-    far_field_reshaped_abs = (abs.(far_field_reshaped)).^2
-    far_field_binned = sum(far_field_reshaped_abs, dims=(1, 3))
-    PSF = dropdims(far_field_binned, dims=(1,3)) ./ freq 
+function far_field_to_PSF(far_field, freq, unit_cell_length, binN, sampleN)
+    far_field_abs = abs.(far_field).^2
+    psfN = size(far_field)[1] ÷ sampleN ÷ binN
+    far_field_abs_integrated = reshape(far_field_abs, (sampleN * binN, psfN, sampleN * binN, psfN))
+    far_field_abs_integrated = sum(far_field_abs_integrated, dims=(1, 3)) 
+    # (unit_cell_length / sampleN) is the integration/sampling width for integrating over each subpixel
+    # divide by freq to turn energy into photon constructor
+    # TODO: to normalize correctly, also need to divide by factor of hbar here
+    PSF = dropdims(far_field_abs_integrated, dims=(1, 3)) .* (unit_cell_length / sampleN) ./ freq 
 end
 
-function far_field_to_PSF(far_field, imghp::ImagingHyperParams, freq)
-    far_field_to_PSF(far_field, imghp.binN, freq)
+function far_field_to_PSF(far_field, freq, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    far_field_to_PSF(far_field, freq, php.unit_cell_length, imghp.binN, imghp.sampleN)
 end
