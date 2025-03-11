@@ -150,7 +150,7 @@ end
 
 get_wavcen(php::PhysicsHyperParams) = get_wavcen(php.λlb_μm, php.λub_μm)
 
-function prepare_geoms(jhp::JobHyperParams)
+function initialize_geoms(jhp::JobHyperParams)
     geoms_init_type = jhp.opthp.geoms_init_type
     @unpack num_unit_cells, pillar_width_lb, pillar_width_ub = jhp.php
     
