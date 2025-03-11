@@ -1,3 +1,4 @@
+# TODO: should wavcen be a parameter of PhysicsHyperParams?
 struct PhysicsHyperParams{FloatType <: AbstractFloat, IntType <: Integer}
     # bandwidth hyper params
     λlb_μm::FloatType # wavelength lower bound (in units of µm)
