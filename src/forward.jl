@@ -66,18 +66,18 @@ function n2f_kernel(freq, z, ϵ, μ, n2f_size, unit_cell_length, sampleN)
     fft([efield(x, y) * -μ / ϵ for x in gridout, y in gridout])
 end
 
-function get_n2f_kernel(freq, z, num_unit_cells, unit_cell_length, psfN, binN, sampleN)
+function get_n2f_kernel(freq, focal_length, num_unit_cells, unit_cell_length, psfN, binN, sampleN)
     # TODO: this might change when i implement image sampling
     n2f_size = (num_unit_cells + binN*psfN)*sampleN
-    n2f_kernel(freq, z, 1.0, 1.0, n2f_size, unit_cell_length, sampleN)
+    n2f_kernel(freq, focal_length, 1.0, 1.0, n2f_size, unit_cell_length, sampleN)
 end
 
-function get_n2f_kernel(freq, z, jhp::JobHyperParams)
+function get_n2f_kernel(freq, jhp::JobHyperParams)
     php, imghp = jhp.php, jhp.imghp
-    @unpack num_unit_cells, unit_cell_length = php
+    @unpack focal_length, num_unit_cells, unit_cell_length = php
     @unpack objN, imgN, binN, sampleN = imghp
     psfN = (objN + imgN)
-    get_n2f_kernel(freq, z, num_unit_cells, unit_cell_length, psfN, binN, sampleN)
+    get_n2f_kernel(freq, focal_length, num_unit_cells, unit_cell_length, psfN, binN, sampleN)
 end
 
 function near_to_far_field(near_field, n2f_kernel)
