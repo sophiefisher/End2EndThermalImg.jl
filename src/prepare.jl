@@ -85,11 +85,46 @@ function PhysicsHyperParams(;
     )
 end
 
+abstract type AbstractObjectType end
+
 @with_kw struct ImagingHyperParams{IntType <: Integer}
     objN::IntType # number of object pixels in the x and y directions 
     imgN::IntType # number of image pixels in the x and y directions
     binN::IntType # how much to bin each sensor pixel (binN x binN subpixels)
     sampleN::IntType # how many points to sample per subpixel (which has length unit_cell_length, i.e. the metasurface unit cell length)
+    object_type::AbstractObjectType # type of object to generate
+end
+
+# uniformly random Tmap and uniformly random depth map (within bounds)
+struct UniformlyRandomObject{FloatType <: AbstractFloat} <: AbstractObjectType
+    Tlb::FloatType 
+    Tub::FloatType
+    zlb_μm::FloatType
+    zub_μm::FloatType
+
+    # Computed unitless parameters, normalized by λ correponding to center freq
+    zlb::FloatType
+    zub::FloatType
+end
+
+function UniformlyRandomObject(; 
+    Tlb::FloatType, 
+    Tub::FloatType,
+    zlb_μm::FloatType,
+    zub_μm::FloatType,
+    php::PhysicsHyperParams
+) where {FloatType <: AbstractFloat}
+wavcen = get_wavcen(php)
+    zlb = zlb_μm / wavcen
+    zub = zub_μm / wavcen
+    return UniformlyRandomObject{FloatType}(
+        Tlb,
+        Tub,
+        zlb_μm,
+        zub_μm,
+        zlb,
+        zub
+    )
 end
 
 @with_kw struct OptimizeHyperParams
