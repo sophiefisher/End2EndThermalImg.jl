@@ -158,3 +158,13 @@ function initialize_geoms(jhp::JobHyperParams)
         return fill((pillar_width_lb + pillar_width_ub)/2, num_unit_cells, num_unit_cells)
     end
 end
+
+function get_object(object_type::UniformlyRandomObject, imghp::ImagingHyperParams)
+    Tmap = rand(object_type.Tlb:eps():object_type.Tub, imghp.objN, imghp.objN)
+    zmap = rand(object_type.zlb:eps():object_type.zub, imghp.objN, imghp.objN)
+    (; Tmap, zmap)
+end
+
+function get_object(imghp::ImagingHyperParams)
+    get_object(imghp.object_type, imghp)
+end
