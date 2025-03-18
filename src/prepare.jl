@@ -96,11 +96,12 @@ abstract type AbstractObjectType end
 end
 
 # uniformly random Tmap and uniformly random depth map (within bounds)
-struct UniformlyRandomObject{FloatType <: AbstractFloat} <: AbstractObjectType
+struct UniformlyRandomObject{FloatType <: AbstractFloat, IntType <: Integer} <: AbstractObjectType
     Tlb::FloatType 
     Tub::FloatType
     zlb_μm::FloatType
     zub_μm::FloatType
+    zlen::IntType
 
     # Computed unitless parameters, normalized by λ correponding to center freq
     zlb::FloatType
@@ -112,16 +113,18 @@ function UniformlyRandomObject(;
     Tub::FloatType,
     zlb_μm::FloatType,
     zub_μm::FloatType,
+    zlen::IntType,
     php::PhysicsHyperParams
-) where {FloatType <: AbstractFloat}
+) where {FloatType <: AbstractFloat, IntType <: Integer}
 wavcen = get_wavcen(php)
     zlb = zlb_μm / wavcen
     zub = zub_μm / wavcen
-    return UniformlyRandomObject{FloatType}(
+    return UniformlyRandomObject{FloatType, IntType}(
         Tlb,
         Tub,
         zlb_μm,
         zub_μm,
+        zlen,
         zlb,
         zub
     )
@@ -161,7 +164,7 @@ end
 
 function get_object(object_type::UniformlyRandomObject, imghp::ImagingHyperParams)
     Tmap = rand(object_type.Tlb:eps():object_type.Tub, imghp.objN, imghp.objN)
-    zmap = rand(object_type.zlb:eps():object_type.zub, imghp.objN, imghp.objN)
+    zmap = rand(LinRange(object_type.zlb, object_type.zub, object_type.zlen), imghp.objN, imghp.objN)
     (; Tmap, zmap)
 end
 
