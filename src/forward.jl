@@ -67,7 +67,6 @@ function n2f_kernel(freq, z, ϵ, μ, n2f_size, unit_cell_length, sampleN)
 end
 
 function get_n2f_kernel(freq, focal_length, num_unit_cells, unit_cell_length, psfN, binN, sampleN)
-    # TODO: this might change when i implement image sampling
     n2f_size = (num_unit_cells + binN*psfN)*sampleN
     n2f_kernel(freq, focal_length, 1.0, 1.0, n2f_size, unit_cell_length, sampleN)
 end
