@@ -52,7 +52,6 @@ function get_near_field(incident_field, surrogate, geoms, imghp::ImagingHyperPar
 end
 
 # TODO: implement absolute scaling factor for the green's functions
-# TODO: this might change when i implement image sampling
 function n2f_kernel(freq, z, ϵ, μ, n2f_size, unit_cell_length, sampleN)
     ω = 2 * π * freq
     n = √(ϵ*μ)
