@@ -87,24 +87,67 @@ end
 
 abstract type AbstractObjectType end
 
-@with_kw struct ImagingHyperParams{IntType <: Integer}
+struct ImagingHyperParams{FloatType <: AbstractFloat, IntType <: Integer}
     objN::IntType # number of object pixels in the x and y directions 
     imgN::IntType # number of image pixels in the x and y directions
     binN::IntType # how much to bin each sensor pixel (binN x binN subpixels)
     sampleN::IntType # how many points to sample per subpixel (which has length unit_cell_length, i.e. the metasurface unit cell length)
+    PSF_zlb_μm::FloatType
+    PSF_Δz_μm::FloatType
+    PSF_zlen::IntType
     object_type::AbstractObjectType # type of object to generate
+
+    # Computed parameters
+    PSF_zlb::FloatType
+    PSF_Δz::FloatType
+    PSF_zub_μm::FloatType
+    PSF_zub::FloatType
+end
+
+function ImagingHyperParams(; 
+    objN::IntType,
+    imgN::IntType,
+    binN::IntType,
+    sampleN::IntType,
+    PSF_zlb_μm::FloatType,
+    PSF_Δz_μm::FloatType,
+    PSF_zlen::IntType,
+    object_type::AbstractObjectType,
+    php::PhysicsHyperParams
+) where {FloatType <: AbstractFloat, IntType <: Integer}
+    wavcen = get_wavcen(php)
+    PSF_zlb = PSF_zlb_μm / wavcen
+    PSF_Δz = PSF_Δz_μm / wavcen
+    PSF_zub_μm = PSF_zlb_μm + PSF_Δz_μm*(PSF_zlen - 1)
+    PSF_zub = PSF_zub_μm / wavcen
+    return ImagingHyperParams{FloatType, IntType}(
+        objN,
+        imgN,
+        binN,
+        sampleN,
+        PSF_zlb_μm,
+        PSF_Δz_μm,
+        PSF_zlen,
+        object_type,
+        PSF_zlb,
+        PSF_Δz,
+        PSF_zub_μm,
+        PSF_zub
+    )
 end
 
 # uniformly random Tmap and uniformly random depth map (within bounds)
 struct UniformlyRandomObject{FloatType <: AbstractFloat, IntType <: Integer} <: AbstractObjectType
     Tlb::FloatType 
     Tub::FloatType
-    zlb_μm::FloatType
-    zub_μm::FloatType
-    zlen::IntType
+    zlb_μm::FloatType # lower bound z coordinate of the object (assumes the metasurface is at z = 0, so this should be negative)
+    Δz_μm::FloatType
+    zlen::IntType 
 
-    # Computed unitless parameters, normalized by λ correponding to center freq
+    # Computed parameters
     zlb::FloatType
+    Δz::FloatType
+    zub_μm::FloatType # upper bound z coordinate of the object (assumes the metasurface is at z = 0, so this should be negative)
     zub::FloatType
 end
 
@@ -112,20 +155,24 @@ function UniformlyRandomObject(;
     Tlb::FloatType, 
     Tub::FloatType,
     zlb_μm::FloatType,
-    zub_μm::FloatType,
-    zlen::IntType,
+    Δz_μm::FloatType,
+    zlen::IntType, 
     php::PhysicsHyperParams
 ) where {FloatType <: AbstractFloat, IntType <: Integer}
-wavcen = get_wavcen(php)
+    wavcen = get_wavcen(php)
     zlb = zlb_μm / wavcen
+    Δz = Δz_μm / wavcen
+    zub_μm = zlb_μm + Δz_μm*(zlen - 1)
     zub = zub_μm / wavcen
     return UniformlyRandomObject{FloatType, IntType}(
         Tlb,
         Tub,
         zlb_μm,
-        zub_μm,
+        Δz_μm,
         zlen,
         zlb,
+        Δz,
+        zub_μm,
         zub
     )
 end
@@ -164,10 +211,14 @@ end
 
 function get_object(object_type::UniformlyRandomObject, imghp::ImagingHyperParams)
     Tmap = rand(object_type.Tlb:eps():object_type.Tub, imghp.objN, imghp.objN)
-    zmap = rand(LinRange(object_type.zlb, object_type.zub, object_type.zlen), imghp.objN, imghp.objN)
+    zmap = rand(object_type.zlb:object_type.Δz:object_type.zlb + object_type.Δz*(object_type.zlen - 1), imghp.objN, imghp.objN)
     (; Tmap, zmap)
 end
 
 function get_object(imghp::ImagingHyperParams)
     get_object(imghp.object_type, imghp)
+end
+
+function get_PSF_zcoords(imghp::ImagingHyperParams)
+    imghp.PSF_zlb:imghp.PSF_Δz:imghp.PSF_zlb + imghp.PSF_Δz*(imghp.PSF_zlen - 1)
 end
