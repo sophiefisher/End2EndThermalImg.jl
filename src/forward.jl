@@ -18,6 +18,7 @@ function convolve(inp, kernel)
     out
 end
 
+# z is the distance between the object plane and the metasurface
 function incident_field(freq, z, n, num_unit_cells, unit_cell_length)
     ω = 2 * π * freq
     k = n * ω
