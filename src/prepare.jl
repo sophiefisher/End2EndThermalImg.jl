@@ -17,6 +17,8 @@ struct PhysicsHyperParams{FloatType <: AbstractFloat, IntType <: Integer}
     substrate_material::String # material of the substrate
     nG::IntType # number of fourier components in RCWA (truncation order)
 
+    # Computed parameters
+    wavcen::FloatType # wavelength corresponding to center frequency
     # Computed unitless parameters, normalized by λ correponding to center freq
     λlb::FloatType # wavelength lower bound 
     λub::FloatType # wavelength upper bound 
@@ -72,6 +74,7 @@ function PhysicsHyperParams(;
         substrate_height_μm,
         substrate_material,
         nG,
+        wavcen,
         λlb,
         λub,
         freqlb,
@@ -115,7 +118,7 @@ function ImagingHyperParams(;
     object_type::AbstractObjectType,
     php::PhysicsHyperParams
 ) where {FloatType <: AbstractFloat, IntType <: Integer}
-    wavcen = get_wavcen(php)
+    wavcen = php.wavcen
     PSF_zlb = PSF_zlb_μm / wavcen
     PSF_Δz = PSF_Δz_μm / wavcen
     PSF_zub_μm = PSF_zlb_μm + PSF_Δz_μm*(PSF_zlen - 1)
@@ -159,7 +162,7 @@ function UniformlyRandomObject(;
     zlen::IntType, 
     php::PhysicsHyperParams
 ) where {FloatType <: AbstractFloat, IntType <: Integer}
-    wavcen = get_wavcen(php)
+    wavcen = php.wavcen
     zlb = zlb_μm / wavcen
     Δz = Δz_μm / wavcen
     zub_μm = zlb_μm + Δz_μm*(zlen - 1)
@@ -197,8 +200,6 @@ function get_wavcen(λlb_μm, λub_μm)
     wavcen = round(1 / freq_center, sigdigits = 3)
     wavcen
 end
-
-get_wavcen(php::PhysicsHyperParams) = get_wavcen(php.λlb_μm, php.λub_μm)
 
 function initialize_geoms(jhp::JobHyperParams)
     geoms_init_type = jhp.opthp.geoms_init_type

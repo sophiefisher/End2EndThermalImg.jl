@@ -12,8 +12,7 @@ end
 convert_freq_unitless_to_λ_µm(freq, wavcen) = wavcen / freq
 
 function convert_freq_unitless_to_λ_µm(freq, php::PhysicsHyperParams)
-    wavcen = get_wavcen(php)
-    convert_freq_unitless_to_λ_µm(freq, wavcen)
+    convert_freq_unitless_to_λ_µm(freq, php.wavcen)
 end
 
 function get_freq_chebpoints(php::PhysicsHyperParams)
