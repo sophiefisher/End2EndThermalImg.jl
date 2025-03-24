@@ -8,8 +8,8 @@ of size kerL x kerL to produce an output of size (kerL - inpL) x (kerL - inpL).
 # TODO: why does this assume the kernel is already fourier transformed?
 function convolve(inp, kernel)
     # inpL < kerL
-    inpL = size(inp)[1]
-    kerL = size(kernel)[1]
+    inpL = size(inp, 1)
+    kerL = size(kernel, 1)
     outL = kerL - inpL
 
     arr_pad = [inp zeros(inpL, outL); zeros(outL, inpL) zeros(outL, outL)]
@@ -84,7 +84,7 @@ end
 
 function far_field_to_PSF(far_field, freq, unit_cell_length, binN, sampleN)
     far_field_abs = abs.(far_field).^2
-    psfN = size(far_field)[1] ÷ sampleN ÷ binN
+    psfN = size(far_field, 1) ÷ sampleN ÷ binN
     far_field_abs_integrated = reshape(far_field_abs, (sampleN * binN, psfN, sampleN * binN, psfN))
     far_field_abs_integrated = sum(far_field_abs_integrated, dims=(1, 3)) 
     # (unit_cell_length / sampleN) is the integration/sampling width for integrating over each subpixel
