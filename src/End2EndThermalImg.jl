@@ -5,9 +5,13 @@ module End2EndThermalImg
     export UniformlyRandomObject
     export get_wavcen
     
-    #surrogate.jl
+    # surrogate.jl
     export get_transmission
     export compute_and_save_surrogate_transmission_matrix
+
+    # python modules
+    export grcwa
+    export numpy
 
     using CSV
     using DataFrames
@@ -27,13 +31,11 @@ module End2EndThermalImg
     const kB = 1.380649e-23
     const grcwa = Ref{Py}()
     const numpy = Ref{Py}()
+    
     function __init__()
         grcwa[] = pyimport("grcwa")
         numpy[] = pyimport("numpy")
     end
-
-    export grcwa
-    export numpy
 
     include("prepare.jl")
     include("forward.jl")
