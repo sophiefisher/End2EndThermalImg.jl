@@ -107,12 +107,12 @@ end
 # smoothness_order = 0 yields the triangle function
 function get_discretized_δ_function(smoothness_order, Δz)
     if smoothness_order == Inf
-        f(z) = z > 0 ? exp(-1 / z) : 0
+        f = z -> z > 0 ? exp(-1 / z) : 0
     else
-        f(z) = z > 0 ? z^(smoothness_order + 1) : 0
+        f = z -> z > 0 ? z^(smoothness_order + 1) : 0
     end
-    g(z) = f(z) / ( f(z) + f(1-z) )
-    δ(z) = (-g(z ./ Δz) - g(-z ./ Δz) + 1) .* (1/Δz)
+    g = z -> f(z) / ( f(z) + f(1-z) )
+    δ = z -> (-g(z ./ Δz) - g(-z ./ Δz) + 1) .* (1/Δz)
 end
 
 function get_discretized_δ_function(imghp::ImagingHyperParams)
