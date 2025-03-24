@@ -98,6 +98,7 @@ struct ImagingHyperParams{FloatType <: AbstractFloat, IntType <: Integer}
     PSF_zlb_μm::FloatType
     PSF_Δz_μm::FloatType
     PSF_zlen::IntType
+    smoothness_order::FloatType # smoothness order of the discretized δ function
     object_type::AbstractObjectType # type of object to generate
 
     # Computed parameters
@@ -115,6 +116,7 @@ function ImagingHyperParams(;
     PSF_zlb_μm::FloatType,
     PSF_Δz_μm::FloatType,
     PSF_zlen::IntType,
+    smoothness_order::FloatType,
     object_type::AbstractObjectType,
     php::PhysicsHyperParams
 ) where {FloatType <: AbstractFloat, IntType <: Integer}
@@ -131,6 +133,7 @@ function ImagingHyperParams(;
         PSF_zlb_μm,
         PSF_Δz_μm,
         PSF_zlen,
+        smoothness_order,
         object_type,
         PSF_zlb,
         PSF_Δz,
