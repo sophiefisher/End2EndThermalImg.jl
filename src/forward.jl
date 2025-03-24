@@ -70,8 +70,7 @@ function get_n2f_kernel(freq, focal_length, num_unit_cells, unit_cell_length, ps
     n2f_kernel(freq, focal_length, 1.0, 1.0, n2f_size, unit_cell_length, sampleN)
 end
 
-function get_n2f_kernel(freq, jhp::JobHyperParams)
-    php, imghp = jhp.php, jhp.imghp
+function get_n2f_kernel(freq, php::PhysicsHyperParams, imghp::ImagingHyperParams)
     @unpack focal_length, num_unit_cells, unit_cell_length = php
     @unpack objN, imgN, binN, sampleN = imghp
     psfN = (objN + imgN)
