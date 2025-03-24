@@ -47,8 +47,7 @@ function get_near_field(incident_field, surrogate, geoms, sampleN)
 end
 
 function get_near_field(incident_field, surrogate, geoms, imghp::ImagingHyperParams)
-    near = incident_field .* surrogate.(geoms)
-    near = repeat(near, inner=(imghp.sampleN, imghp.sampleN))
+    get_near_field(incident_field, surrogate, geoms, imghp.sampleN)
 end
 
 # TODO: implement absolute scaling factor for the green's functions
