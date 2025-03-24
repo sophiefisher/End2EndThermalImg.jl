@@ -96,3 +96,38 @@ end
 function far_field_to_PSF(far_field, freq, php::PhysicsHyperParams, imghp::ImagingHyperParams)
     far_field_to_PSF(far_field, freq, php.unit_cell_length, imghp.binN, imghp.sampleN)
 end
+
+function get_PSF(freq, z, surrogate, geoms, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    incident = get_incident_field(freq, z, php)
+    near = get_near_field(incident, surrogate, geoms, imghp)
+    n2f_kernel = get_n2f_kernel(freq, php, imghp)
+    far = near_to_far_field(near, n2f_kernel)
+    PSF = far_field_to_PSF(far, freq, php, imghp)
+end
+
+# smoothness_order = 0 yields the triangle function
+function get_discretized_δ_function(smoothness_order, Δz)
+    if smoothness_order == Inf
+        f(z) = z > 0 ? exp(-1 / z) : 0
+    else
+        f(z) = z > 0 ? z^(smoothness_order + 1) : 0
+    end
+    g(z) = f(z) / ( f(z) + f(1-z) )
+    δ(z) = (-g(z ./ Δz) - g(-z ./ Δz) + 1) .* (1/Δz)
+end
+
+function get_discretized_δ_function(imghp::ImagingHyperParams)
+    get_discretized_δ_function(imghp.smoothness_order, imghp.PSF_Δz)
+end
+
+function get_black_body_spectrum(Tmap, freqs, php::PhysicsHyperParams)
+    b = [(2 .* freq ^3 ) ./ (exp.(ħ .* (freq .* c .* 10^6 / php.wavcen) ./ (kB .* Tmap) ) .- 1) for freq in freqs]
+    #b = reduce(hcat, b)
+    #b = reshape(b, size(Tmap, 1), size(Tmap, 1), :)
+    b
+end
+
+function convolve_PSF_with_black_body_spectrum(PSF, b)
+    fftPSF = fft(PSF)
+    convolve(b, fftPSF)
+end
