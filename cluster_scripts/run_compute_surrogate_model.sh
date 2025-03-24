@@ -3,6 +3,7 @@
 #SBATCH --job-name=compute_surrogate_model
 #SBATCH --output=logs/log-%j-%x.out
 #SBATCH -c 10
+#SBATCH --no-requeue   
 #initialize module command
 source /etc/profile
 
