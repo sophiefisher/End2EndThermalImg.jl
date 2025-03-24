@@ -67,8 +67,8 @@ function compute_surrogate_transmission_matrix(php::PhysicsHyperParams)
             pillar_ϵ = get_pillar_ϵ(λ_µm)
             substrate_ϵ = get_substrate_ϵ(λ_µm)
             transmission = get_transmission(freq, width, pillar_height, pillar_ϵ, unit_cell_length, substrate_ϵ, php.nG)
-            flush(stdout)
             pyimport("sys").stdout.flush()
+            flush(stdout)
             transmission_matrix[i, j] = transmission
         end
     end
