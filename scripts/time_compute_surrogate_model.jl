@@ -15,7 +15,7 @@ php = PhysicsHyperParams(
     pillar_material = "Si_no_absorption",
     substrate_height_μm = 300.0,
     substrate_material = "Si_no_absorption",
-    nG = 10
+    nG = 1000
 )
 
 @btime End2EndThermalImg.compute_and_save_surrogate_transmission_matrix(php)
