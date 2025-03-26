@@ -88,6 +88,7 @@ function compute_and_save_surrogate_transmission_matrix(php::PhysicsHyperParams)
     transmission_matrix = compute_surrogate_transmission_matrix(php)
     filename = get_surrogate_filename(php)
     CSV.write(filename, Tables.table(transmission_matrix) )
+    return nothing
 end
 
 # one for each frequency
