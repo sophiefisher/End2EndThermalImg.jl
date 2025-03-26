@@ -18,7 +18,6 @@ module End2EndThermalImg
     using Interpolations
     using FastChebInterp
     using Parameters
-    using PythonCall
     using Dates
     using FFTW
     using Memoization
@@ -29,13 +28,6 @@ module End2EndThermalImg
     const c = 299792458
     const ħ = 6.62607015e-34
     const kB = 1.380649e-23
-    const grcwa = Ref{Py}()
-    const numpy = Ref{Py}()
-    
-    function __init__()
-        grcwa[] = pyimport("grcwa")
-        numpy[] = pyimport("numpy")
-    end
 
     include("prepare.jl")
     include("forward.jl")
