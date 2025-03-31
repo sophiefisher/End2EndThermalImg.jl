@@ -60,6 +60,8 @@ function compute_surrogate_transmission_matrix(php::PhysicsHyperParams)
     width_chebpoints = get_width_chebpoints(php)
 
     transmission_matrix = Matrix{Complex{Float64}}(undef, length(freq_chebpoints), length(width_chebpoints))
+    ENV["OPENBLAS_NUM_THREADS"] = 1
+    ENV["MKL_NUM_THREADS"] = 1
     Threads.@threads for idx in CartesianIndices((eachindex(freq_chebpoints), eachindex(width_chebpoints)))
         i, j = Tuple(idx)
         @info "freq: $(i) / $(length(freq_chebpoints)), width: $(j) / $(length(width_chebpoints))"
