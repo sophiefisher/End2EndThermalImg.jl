@@ -23,6 +23,7 @@ module End2EndThermalImg
     using Memoization
     using FastChebInterp
     using PythonPlot
+    using PythonCall
     using LaTeXStrings
     using Distributed
 
