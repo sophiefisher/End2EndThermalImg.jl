@@ -44,6 +44,7 @@ end
 function get_near_field(incident_field, surrogate, geoms, sampleN)
     near = incident_field .* surrogate.(geoms)
     near = repeat(near, inner=(sampleN, sampleN))
+    near
 end
 
 function get_near_field(incident_field, surrogate, geoms, imghp::ImagingHyperParams)
@@ -62,23 +63,27 @@ function n2f_kernel(freq, z, ϵ, μ, n2f_size, unit_cell_length, sampleN)
     end
 
     gridout = range(-(n2f_size ÷ 2), (n2f_size ÷ 2) - 1, length = n2f_size  ) .* (unit_cell_length / sampleN)
-    fft([efield(x, y) * -μ / ϵ for x in gridout, y in gridout])
+    n2f_kernel = fft([efield(x, y) * -μ / ϵ for x in gridout, y in gridout])
+    n2f_kernel
 end
 
 function get_n2f_kernel(freq, focal_length, num_unit_cells, unit_cell_length, psfN, binN, sampleN)
     n2f_size = (num_unit_cells + binN*psfN)*sampleN
-    n2f_kernel(freq, focal_length, 1.0, 1.0, n2f_size, unit_cell_length, sampleN)
+    n2f_kernel = n2f_kernel(freq, focal_length, 1.0, 1.0, n2f_size, unit_cell_length, sampleN)
+    n2f_kernel
 end
 
 function get_n2f_kernel(freq, php::PhysicsHyperParams, imghp::ImagingHyperParams)
     @unpack focal_length, num_unit_cells, unit_cell_length = php
     @unpack objN, imgN, binN, sampleN = imghp
     psfN = (objN + imgN)
-    get_n2f_kernel(freq, focal_length, num_unit_cells, unit_cell_length, psfN, binN, sampleN)
+    n2f_kernel = get_n2f_kernel(freq, focal_length, num_unit_cells, unit_cell_length, psfN, binN, sampleN)
+    n2f_kernel
 end
 
 function near_to_far_field(near_field, n2f_kernel)
     far = convolve(near_field, n2f_kernel)
+    far
 end
 
 function far_field_to_PSF(far_field, freq, unit_cell_length, binN, sampleN)
@@ -90,6 +95,7 @@ function far_field_to_PSF(far_field, freq, unit_cell_length, binN, sampleN)
     # divide by freq to turn energy into photon constructor
     # TODO: to normalize correctly, also need to divide by factor of hbar here
     PSF = dropdims(far_field_abs_integrated, dims=(1, 3)) .* (unit_cell_length / sampleN) ./ freq 
+    PSF
 end
 
 function far_field_to_PSF(far_field, freq, php::PhysicsHyperParams, imghp::ImagingHyperParams)
@@ -102,6 +108,7 @@ function get_PSF(freq, z, surrogate, geoms, php::PhysicsHyperParams, imghp::Imag
     n2f_kernel = get_n2f_kernel(freq, php, imghp)
     far = near_to_far_field(near, n2f_kernel)
     PSF = far_field_to_PSF(far, freq, php, imghp)
+    PSF
 end
 
 # smoothness_order = 0 yields the triangle function
@@ -113,10 +120,12 @@ function get_discretized_δ_function(smoothness_order, Δz)
     end
     g = z -> f(z) / ( f(z) + f(1-z) )
     δ = z -> (-g(z ./ Δz) - g(-z ./ Δz) + 1) .* (1/Δz)
+    δ
 end
 
 function get_discretized_δ_function(imghp::ImagingHyperParams)
-    get_discretized_δ_function(imghp.smoothness_order, imghp.PSF_Δz)
+    δ = get_discretized_δ_function(imghp.smoothness_order, imghp.PSF_Δz)
+    δ
 end
 
 function get_black_body_spectrum(Tmap, freqs, php::PhysicsHyperParams)
@@ -128,5 +137,6 @@ end
 
 function convolve_PSF_with_black_body_spectrum(PSF, b)
     fftPSF = fft(PSF)
-    convolve(b, fftPSF)
+    out = convolve(b, fftPSF)
+    out
 end
