@@ -25,7 +25,7 @@ function get_width_chebpoints(php::PhysicsHyperParams)
     chebpoints(php.pillar_width_order, php.pillar_width_lb, php.pillar_width_ub)
 end
 
-function get_transmission(freq, pillar_width, pillar_height, pillar_epsilon, unit_cell_length, substrate_epsilon, nG)
+@everywhere function get_transmission(freq, pillar_width, pillar_height, pillar_epsilon, unit_cell_length, substrate_epsilon, nG)
     # nG is number of fourier components in RCWA (truncation order)
     L1 = pylist([unit_cell_length,0])
     L2 = pylist([0,unit_cell_length])
@@ -60,9 +60,9 @@ function compute_surrogate_transmission_matrix(php::PhysicsHyperParams)
     width_chebpoints = get_width_chebpoints(php)
 
     transmission_matrix = Matrix{Complex{Float64}}(undef, length(freq_chebpoints), length(width_chebpoints))
-    ENV["OPENBLAS_NUM_THREADS"] = 1
-    ENV["MKL_NUM_THREADS"] = 1
-    Threads.@threads for idx in CartesianIndices((eachindex(freq_chebpoints), eachindex(width_chebpoints)))
+    indices = collect(CartesianIndices((eachindex(freq_chebpoints), eachindex(width_chebpoints))))
+
+    results = pmap(idx -> begin
         i, j = Tuple(idx)
         @info "freq: $(i) / $(length(freq_chebpoints)), width: $(j) / $(length(width_chebpoints))"
         freq = freq_chebpoints[i]
@@ -70,8 +70,12 @@ function compute_surrogate_transmission_matrix(php::PhysicsHyperParams)
         λ_µm = convert_freq_unitless_to_λ_µm(freq, php)
         pillar_ϵ = get_pillar_ϵ(λ_µm)
         substrate_ϵ = get_substrate_ϵ(λ_µm)
-        transmission = readchomp(`python3 python_scripts/get_transmission.py $freq $width $pillar_height $pillar_ϵ $unit_cell_length $substrate_ϵ $(php.nG)`)
-        transmission_matrix[i, j] = parse(ComplexF64, transmission)
+        transmission = get_transmission(freq, width, pillar_height, pillar_ϵ, unit_cell_length, substrate_ϵ, php.nG)
+        (idx, transmission)
+    end, indices)
+
+    for (idx, value) in results
+        transmission_matrix[idx] = value
     end
     transmission_matrix
 end
