@@ -8,11 +8,7 @@ module End2EndThermalImg
     # surrogate.jl
     export get_transmission
     export compute_and_save_surrogate_transmission_matrix
-
-    # python modules
-    export grcwa
-    export numpy
-
+    
     using CSV
     using DataFrames
     using Interpolations
