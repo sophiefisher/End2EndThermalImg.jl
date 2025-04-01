@@ -24,6 +24,7 @@ module End2EndThermalImg
     using FastChebInterp
     using PythonPlot
     using LaTeXStrings
+    using Distributed
 
     const c = 299792458
     const ħ = 6.62607015e-34
