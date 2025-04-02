@@ -1,3 +1,4 @@
+#=
 using End2EndThermalImg
 using BenchmarkTools
 
@@ -20,3 +21,15 @@ php = PhysicsHyperParams(
 
 End2EndThermalImg.compute_and_save_surrogate_transmission_matrix(php)
 End2EndThermalImg.plot_surrogate_models(php)
+=#
+
+using Distributed
+@everywhere using PythonCall
+
+@time pmap(1:4) do i
+    __main__, time = pyimport("__main__", "time")
+    time.sleep(4 - i)
+    __main__.foo = myid()
+    time.sleep(i)
+    i => __main__.foo
+end
