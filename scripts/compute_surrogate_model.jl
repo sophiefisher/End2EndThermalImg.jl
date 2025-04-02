@@ -54,8 +54,8 @@ width_chebpoints = End2EndThermalImg.get_width_chebpoints(php)
 freq = freq_chebpoints[1]
 width = width_chebpoints[1]
 λ_µm = End2EndThermalImg.convert_freq_unitless_to_λ_µm(freq, php)
-pillar_ϵ = End2EndThermalImg.get_pillar_ϵ(λ_µm)
-substrate_ϵ = End2EndThermalImg.get_substrate_ϵ(λ_µm)
+pillar_ϵ = get_pillar_ϵ(λ_µm)
+substrate_ϵ = get_substrate_ϵ(λ_µm)
 
 @time pmap(1:4) do i
     println(myid())
