@@ -60,4 +60,5 @@ substrate_ϵ = get_substrate_ϵ(λ_µm)
 @time pmap(1:4) do i
     println(myid())
     transmission = get_transmission(freq, width, pillar_height, pillar_ϵ, unit_cell_length, substrate_ϵ, php.nG)
+    transmission = get_transmission(freq, width, pillar_height, pillar_ϵ, unit_cell_length, substrate_ϵ, php.nG)
 end
