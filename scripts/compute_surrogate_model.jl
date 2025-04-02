@@ -51,6 +51,13 @@ get_substrate_ϵ = End2EndThermalImg.get_permittivity_function(php.substrate_mat
 freq_chebpoints = End2EndThermalImg.get_freq_chebpoints(php)
 width_chebpoints = End2EndThermalImg.get_width_chebpoints(php)
 
+freq = freq_chebpoints[1]
+width = width_chebpoints[1]
+λ_µm = convert_freq_unitless_to_λ_µm(freq, php)
+pillar_ϵ = get_pillar_ϵ(λ_µm)
+substrate_ϵ = get_substrate_ϵ(λ_µm)
+
 @time pmap(1:4) do i
     println(myid())
+    transmission = get_transmission(freq, width, pillar_height, pillar_ϵ, unit_cell_length, substrate_ϵ, php.nG)
 end
