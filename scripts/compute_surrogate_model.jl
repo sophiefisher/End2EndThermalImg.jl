@@ -24,6 +24,7 @@ End2EndThermalImg.plot_surrogate_models(php)
 =#
 
 using Distributed
+using Parameters
 @everywhere using PythonCall
 @everywhere using End2EndThermalImg
 
@@ -44,6 +45,12 @@ php = PhysicsHyperParams(
     nG = 1000
 )
 
+@unpack pillar_height, unit_cell_length = php
+get_pillar_ϵ = End2EndThermalImg.get_permittivity_function(php.pillar_material)
+get_substrate_ϵ = End2EndThermalImg.get_permittivity_function(php.substrate_material)
+freq_chebpoints = End2EndThermalImg.get_freq_chebpoints(php)
+width_chebpoints = End2EndThermalImg.get_width_chebpoints(php)
+
 @time pmap(1:4) do i
-    freq_chebpoints = End2EndThermalImg.get_freq_chebpoints(php)
+    println(myid())
 end
