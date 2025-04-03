@@ -3,9 +3,9 @@
         filepath = "materials/Si_n_Shkondin.csv"
         data = CSV.read(filepath, DataFrame)
         λ_µm = data[:,:wl]
-        n = data[:,:n]
-        itp = linear_interpolation(λ_µm, n)
-        return get_permittivity(λ_µm) = itp(λ_µm) # wavelength must be in microns
+        ϵ = data[:,:n].^2
+        itp = linear_interpolation(λ_µm, ϵ)
+        return itp # wavelength must be in microns
     end
 end
 
