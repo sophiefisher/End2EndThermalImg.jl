@@ -72,6 +72,7 @@ function compute_surrogate_transmission_matrix(php::PhysicsHyperParams)
         substrate_ϵ = get_substrate_ϵ(λ_µm)
         #transmission = readchomp(`python3 python_scripts/get_transmission.py $freq $width $pillar_height $pillar_ϵ $unit_cell_length $substrate_ϵ $(php.nG)`)
         transmission = get_transmission(freq, width, pillar_height, pillar_ϵ, unit_cell_length, substrate_ϵ, php.nG)
+        GC.gc()
         (idx, transmission)
     end, indices)
 
