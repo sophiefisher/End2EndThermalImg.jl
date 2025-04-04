@@ -69,8 +69,8 @@ end
 
 function get_n2f_kernel(freq, focal_length, num_unit_cells, unit_cell_length, psfN, binN, sampleN)
     n2f_size = (num_unit_cells + binN*psfN)*sampleN
-    n2f_kernel = n2f_kernel(freq, focal_length, 1.0, 1.0, n2f_size, unit_cell_length, sampleN)
-    n2f_kernel
+    out = n2f_kernel(freq, focal_length, 1.0, 1.0, n2f_size, unit_cell_length, sampleN)
+    out
 end
 
 function get_n2f_kernel(freq, php::PhysicsHyperParams, imghp::ImagingHyperParams)
@@ -128,15 +128,25 @@ function get_discretized_δ_function(imghp::ImagingHyperParams)
     δ
 end
 
-function get_black_body_spectrum(Tmap, freqs, php::PhysicsHyperParams)
-    b = [(2 .* freq ^3 ) ./ (exp.(ħ .* (freq .* c .* 10^6 / php.wavcen) ./ (kB .* Tmap) ) .- 1) for freq in freqs]
-    #b = reduce(hcat, b)
-    #b = reshape(b, size(Tmap, 1), size(Tmap, 1), :)
+function get_black_body_spectrum(Tmap_zslice, php::PhysicsHyperParams)
+    freqs = get_freq_chebpoints(php)
+    b = [(2 .* freq ^3 ) ./ (exp.(ħ .* (freq .* c .* 10^6 / php.wavcen) ./ (kB .* Tmap_zslice) ) .- 1) for freq in freqs]
     b
 end
 
-function convolve_PSF_with_black_body_spectrum(PSF, b)
+# fixed freq and fixed z
+function convolve_PSF_with_b(PSF, b_freqslice)
     fftPSF = fft(PSF)
-    out = convolve(b, fftPSF)
+    out = real.(convolve(b_freqslice, fftPSF))
     out
+end
+
+function make_image_fixed_z(Tmap_zslice, geoms, z, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    b = get_black_body_spectrum(Tmap_zslice, php)
+    freqs = get_freq_chebpoints(php)
+    surrogates = load_surrogate_models(php)
+    weights = get_clenshaw_curtis_quadrature_weights(php)
+    PSFs = [get_PSF(freqs[i], z, surrogates[i], geoms, php, imghp) for i in eachindex(freqs)]
+    image = sum(weights .* map(convolve_PSF_with_b, PSFs, b))
+    image
 end
