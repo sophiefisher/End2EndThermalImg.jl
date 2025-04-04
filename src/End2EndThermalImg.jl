@@ -23,11 +23,21 @@ module End2EndThermalImg
     using Memoization
     using FastChebInterp
     using PythonPlot
+    using PythonCall
     using LaTeXStrings
+    using Distributed
+    using QuadratureRules
 
     const c = 299792458
     const ħ = 6.62607015e-34
     const kB = 1.380649e-23
+    const grcwa = Ref{Py}()
+    const numpy = Ref{Py}()
+    
+    function __init__()
+        grcwa[] = pyimport("grcwa")
+        numpy[] = pyimport("numpy")
+    end
 
     include("prepare.jl")
     include("forward.jl")

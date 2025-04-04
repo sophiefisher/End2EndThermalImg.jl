@@ -226,3 +226,9 @@ end
 function get_PSF_zcoords(imghp::ImagingHyperParams)
     imghp.PSF_zlb:imghp.PSF_Δz:imghp.PSF_zlb + imghp.PSF_Δz*(imghp.PSF_zlen - 1)
 end
+
+# weights are symmetric, so don't need to reverse them
+function get_clenshaw_curtis_quadrature_weights(php::PhysicsHyperParams)
+    weights = ClenshawCurtisQuadrature(php.freq_order + 1).weights .* (php.frequb .- php.freqlb)
+    weights
+end

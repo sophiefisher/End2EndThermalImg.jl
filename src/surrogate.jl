@@ -3,9 +3,9 @@
         filepath = "materials/Si_n_Shkondin.csv"
         data = CSV.read(filepath, DataFrame)
         λ_µm = data[:,:wl]
-        n = data[:,:n]
-        itp = linear_interpolation(λ_µm, n)
-        return get_permittivity(λ_µm) = itp(λ_µm) # wavelength must be in microns
+        ϵ = data[:,:n].^2
+        itp = linear_interpolation(λ_µm, ϵ)
+        return itp # wavelength must be in microns
     end
 end
 
@@ -60,9 +60,9 @@ function compute_surrogate_transmission_matrix(php::PhysicsHyperParams)
     width_chebpoints = get_width_chebpoints(php)
 
     transmission_matrix = Matrix{Complex{Float64}}(undef, length(freq_chebpoints), length(width_chebpoints))
-    ENV["OPENBLAS_NUM_THREADS"] = 1
-    ENV["MKL_NUM_THREADS"] = 1
-    Threads.@threads for idx in CartesianIndices((eachindex(freq_chebpoints), eachindex(width_chebpoints)))
+    indices = collect(CartesianIndices((eachindex(freq_chebpoints), eachindex(width_chebpoints))))
+
+    results = pmap(idx -> begin
         i, j = Tuple(idx)
         @info "freq: $(i) / $(length(freq_chebpoints)), width: $(j) / $(length(width_chebpoints))"
         freq = freq_chebpoints[i]
@@ -70,8 +70,13 @@ function compute_surrogate_transmission_matrix(php::PhysicsHyperParams)
         λ_µm = convert_freq_unitless_to_λ_µm(freq, php)
         pillar_ϵ = get_pillar_ϵ(λ_µm)
         substrate_ϵ = get_substrate_ϵ(λ_µm)
-        transmission = readchomp(`python3 python_scripts/get_transmission.py $freq $width $pillar_height $pillar_ϵ $unit_cell_length $substrate_ϵ $(php.nG)`)
-        transmission_matrix[i, j] = parse(ComplexF64, transmission)
+        transmission = get_transmission(freq, width, pillar_height, pillar_ϵ, unit_cell_length, substrate_ϵ, php.nG)
+        GC.gc()
+        (idx, transmission)
+    end, indices)
+
+    for (idx, value) in results
+        transmission_matrix[idx] = value
     end
     transmission_matrix
 end
