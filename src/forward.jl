@@ -1,3 +1,17 @@
+@memoize function make_plan(size::Tuple)
+    plan_fft(zeros(ComplexF64, size), flags=FFTW.MEASURE)
+end
+
+function planned_fft(x)
+    plan = make_plan(size(x))
+    plan * x
+end
+
+function planned_ifft(x)
+    plan = make_plan(size(x))
+    plan \ x
+end
+
 """
     convolve(inp, kernel)
 
@@ -13,7 +27,7 @@ function convolve(inp, kernel)
     outL = kerL - inpL
 
     arr_pad = [inp zeros(inpL, outL); zeros(outL, inpL) zeros(outL, outL)]
-    out_pad = ifft(fft(arr_pad) .* kernel)
+    out_pad = planned_ifft(planned_fft(arr_pad) .* kernel)
     out = out_pad[inpL+1:kerL, inpL+1:kerL]
     out
 end
@@ -63,7 +77,7 @@ function n2f_kernel(freq, z, ϵ, μ, n2f_size, unit_cell_length, sampleN)
     end
 
     gridout = range(-(n2f_size ÷ 2), (n2f_size ÷ 2) - 1, length = n2f_size  ) .* (unit_cell_length / sampleN)
-    n2f_kernel = fft([efield(x, y) * -μ / ϵ for x in gridout, y in gridout])
+    n2f_kernel = planned_fft([efield(x, y) * -μ / ϵ for x in gridout, y in gridout])
     n2f_kernel
 end
 
@@ -136,7 +150,7 @@ end
 
 # fixed freq and fixed z
 function convolve_PSF_with_b(PSF, b_freqslice)
-    fftPSF = fft(PSF)
+    fftPSF = planned_fft(PSF)
     out = real.(convolve(b_freqslice, fftPSF))
     out
 end
