@@ -100,18 +100,25 @@ function n2f_kernel(freq, z, ϵ, μ, n2f_size, unit_cell_length, sampleN)
     n2f_kernel
 end
 
-function get_n2f_kernel(freq, focal_length, num_unit_cells, unit_cell_length, psfN, binN, sampleN)
+function get_n2f_size(php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    @unpack num_unit_cells = php
+    @unpack objN, imgN, binN, sampleN = imghp
+    psfN = (objN + imgN)
     n2f_size = (num_unit_cells + binN*psfN)*sampleN
+    n2f_size
+end
+
+function get_n2f_kernel(freq, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    @unpack focal_length, unit_cell_length = php
+    @unpack sampleN = imghp
+    n2f_size = get_n2f_size(php, imghp)
     out = n2f_kernel(freq, focal_length, 1.0, 1.0, n2f_size, unit_cell_length, sampleN)
     out
 end
 
-function get_n2f_kernel(freq, php::PhysicsHyperParams, imghp::ImagingHyperParams)
-    @unpack focal_length, num_unit_cells, unit_cell_length = php
-    @unpack objN, imgN, binN, sampleN = imghp
-    psfN = (objN + imgN)
-    n2f_kernel = get_n2f_kernel(freq, focal_length, num_unit_cells, unit_cell_length, psfN, binN, sampleN)
-    n2f_kernel
+function get_n2f_kernels(freqs, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    n2f_kernels = [get_n2f_kernel(freq, php, imghp) for freq in freqs]
+    n2f_kernels
 end
 
 function near_to_far_field(near_field, n2f_kernel)
