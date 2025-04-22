@@ -59,14 +59,14 @@ function compute_surrogate_transmission_matrix(php::PhysicsHyperParams)
     freq_chebpoints = get_freq_chebpoints(php)
     width_chebpoints = get_width_chebpoints(php)
 
-    transmission_matrix = Matrix{Complex{Float64}}(undef, length(freq_chebpoints), length(width_chebpoints))
-    indices = collect(CartesianIndices((eachindex(freq_chebpoints), eachindex(width_chebpoints))))
+    transmission_matrix = Matrix{Complex{Float64}}(undef, length(width_chebpoints), length(freq_chebpoints))
+    indices = collect(CartesianIndices((eachindex(width_chebpoints), eachindex(freq_chebpoints))))
 
     results = pmap(idx -> begin
         i, j = Tuple(idx)
-        @info "freq: $(i) / $(length(freq_chebpoints)), width: $(j) / $(length(width_chebpoints))"
-        freq = freq_chebpoints[i]
-        width = width_chebpoints[j]
+        @info "freq: $(j) / $(length(freq_chebpoints)), width: $(i) / $(length(width_chebpoints))"
+        freq = freq_chebpoints[j]
+        width = width_chebpoints[i]
         λ_µm = convert_freq_unitless_to_λ_µm(freq, php)
         pillar_ϵ = get_pillar_ϵ(λ_µm)
         substrate_ϵ = get_substrate_ϵ(λ_µm)
