@@ -96,16 +96,16 @@ struct ImagingHyperParams{FloatType <: AbstractFloat, IntType <: Integer}
     binN::IntType # how much to bin each sensor pixel (binN x binN subpixels)
     sampleN::IntType # how many points to sample per subpixel (which has length unit_cell_length, i.e. the metasurface unit cell length)
     PSF_zlb_μm::FloatType
-    PSF_Δz_μm::FloatType
+    PSF_zub_μm::FloatType
     PSF_zlen::IntType
     smoothness_order::FloatType # smoothness order of the discretized δ function
     object_type::AbstractObjectType # type of object to generate
 
     # Computed parameters
     PSF_zlb::FloatType
-    PSF_Δz::FloatType
-    PSF_zub_μm::FloatType
     PSF_zub::FloatType
+    PSF_Δz_μm::FloatType
+    PSF_Δz::FloatType
 end
 
 function ImagingHyperParams(; 
@@ -114,7 +114,7 @@ function ImagingHyperParams(;
     binN::IntType,
     sampleN::IntType,
     PSF_zlb_μm::FloatType,
-    PSF_Δz_μm::FloatType,
+    PSF_zub_μm::FloatType,
     PSF_zlen::IntType,
     smoothness_order::FloatType,
     object_type::AbstractObjectType,
@@ -122,23 +122,24 @@ function ImagingHyperParams(;
 ) where {FloatType <: AbstractFloat, IntType <: Integer}
     wavcen = php.wavcen
     PSF_zlb = PSF_zlb_μm / wavcen
-    PSF_Δz = PSF_Δz_μm / wavcen
-    PSF_zub_μm = PSF_zlb_μm + PSF_Δz_μm*(PSF_zlen - 1)
     PSF_zub = PSF_zub_μm / wavcen
+    PSF_Δz_μm = (PSF_zub_μm - PSF_zlb_μm) / (PSF_zlen - 1)
+    PSF_Δz = PSF_Δz_μm / wavcen
+    
     return ImagingHyperParams{FloatType, IntType}(
         objN,
         imgN,
         binN,
         sampleN,
         PSF_zlb_μm,
-        PSF_Δz_μm,
+        PSF_zub_μm,
         PSF_zlen,
         smoothness_order,
         object_type,
         PSF_zlb,
-        PSF_Δz,
-        PSF_zub_μm,
-        PSF_zub
+        PSF_zub,
+        PSF_Δz_μm,
+        PSF_Δz
     )
 end
 
@@ -147,39 +148,40 @@ struct UniformlyRandomObject{FloatType <: AbstractFloat, IntType <: Integer} <: 
     Tlb::FloatType 
     Tub::FloatType
     zlb_μm::FloatType # lower bound z coordinate of the object (assumes the metasurface is at z = 0, so this should be negative)
-    Δz_μm::FloatType
+    zub_μm::FloatType # upper bound z coordinate of the object (assumes the metasurface is at z = 0, so this should be negative)
     zlen::IntType 
 
     # Computed parameters
     zlb::FloatType
-    Δz::FloatType
-    zub_μm::FloatType # upper bound z coordinate of the object (assumes the metasurface is at z = 0, so this should be negative)
     zub::FloatType
+    Δz_μm::FloatType
+    Δz::FloatType
 end
 
 function UniformlyRandomObject(; 
     Tlb::FloatType, 
     Tub::FloatType,
     zlb_μm::FloatType,
-    Δz_μm::FloatType,
+    zub_μm::FloatType,
     zlen::IntType, 
     php::PhysicsHyperParams
 ) where {FloatType <: AbstractFloat, IntType <: Integer}
     wavcen = php.wavcen
     zlb = zlb_μm / wavcen
-    Δz = Δz_μm / wavcen
-    zub_μm = zlb_μm + Δz_μm*(zlen - 1)
     zub = zub_μm / wavcen
+    Δz_μm = (zub_μm - zlb_μm) / (zlen - 1)
+    Δz = Δz_μm / wavcen
+    
     return UniformlyRandomObject{FloatType, IntType}(
         Tlb,
         Tub,
         zlb_μm,
-        Δz_μm,
+        zub_μm,
         zlen,
         zlb,
-        Δz,
+        zub,
         zub_μm,
-        zub
+        Δz
     )
 end
 
@@ -213,9 +215,12 @@ function initialize_geoms(jhp::JobHyperParams)
     end
 end
 
+get_object_zrange(object_type::AbstractObjectType) = LinRange(object_type.zlb, object_type.zub, object_type.zlen)
+
 function get_object(object_type::UniformlyRandomObject, imghp::ImagingHyperParams)
     Tmap = rand(object_type.Tlb:eps():object_type.Tub, imghp.objN, imghp.objN)
-    zmap = rand(object_type.zlb:object_type.Δz:object_type.zlb + object_type.Δz*(object_type.zlen - 1), imghp.objN, imghp.objN)
+    object_zrange = get_object_zrange(object_type)
+    zmap = rand(object_zrange, imghp.objN, imghp.objN)
     (; Tmap, zmap)
 end
 
@@ -224,7 +229,7 @@ function get_object(imghp::ImagingHyperParams)
 end
 
 function get_PSF_zcoords(imghp::ImagingHyperParams)
-    imghp.PSF_zlb:imghp.PSF_Δz:imghp.PSF_zlb + imghp.PSF_Δz*(imghp.PSF_zlen - 1)
+    LinRange(imghp.PSF_zlb, imghp.PSF_zub, imghp.PSF_zlen)
 end
 
 # weights are symmetric, so don't need to reverse them
