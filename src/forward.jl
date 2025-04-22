@@ -169,6 +169,8 @@ end
 function get_black_body_spectrum(Tmap_zslice, php::PhysicsHyperParams)
     freqs = get_freq_chebpoints(php)
     b = [(2 .* freq ^3 ) ./ (exp.(ħ .* (freq .* c .* 10^6 / php.wavcen) ./ (kB .* Tmap_zslice) ) .- 1) for freq in freqs]
+    #b = reduce(hcat, b);
+    #b = reshape(b, size(Tmap_zslice,1), size(Tmap_zslice,1), :)
     b
 end
 
