@@ -142,10 +142,8 @@ function far_field_to_PSF(far_field, freq, php::PhysicsHyperParams, imghp::Imagi
     far_field_to_PSF(far_field, freq, php.unit_cell_length, imghp.binN, imghp.sampleN)
 end
 
-function get_PSF(freq, z, surrogate, geoms, php::PhysicsHyperParams, imghp::ImagingHyperParams)
-    incident = get_incident_field(freq, z, php)
+function get_PSF(freq, incident, surrogate, geoms, n2f_kernel, php::PhysicsHyperParams, imghp::ImagingHyperParams)
     near = get_near_field(incident, surrogate, geoms, imghp)
-    n2f_kernel = get_n2f_kernel(freq, php, imghp)
     far = near_to_far_field(near, n2f_kernel)
     PSF = far_field_to_PSF(far, freq, php, imghp)
     PSF
