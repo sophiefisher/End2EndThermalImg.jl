@@ -181,12 +181,43 @@ function convolve_with_PSF(PSF, b_freqslice)
     out
 end
 
-function make_image_fixed_z(Tmap_zslice, geoms, z, php::PhysicsHyperParams, imghp::ImagingHyperParams)
-    b = get_black_body_spectrum(Tmap_zslice, php)
+function make_image_at_z(spectrum, incidents, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    #b = get_black_body_spectrum(Tmap_zslice, php)
     freqs = get_freq_chebpoints(php)
     surrogates = load_surrogate_models(php)
     weights = get_clenshaw_curtis_quadrature_weights(php)
-    PSFs = [get_PSF(freqs[i], z, surrogates[i], geoms, php, imghp) for i in eachindex(freqs)]
-    image = sum(weights .* map(convolve_PSF_with_b, PSFs, b))
+    PSFs = [get_PSF(freqs[iF], incidents[iF], surrogates[iF], geoms, n2f_kernels[iF], php, imghp) for iF in eachindex(freqs)]
+    image = sum(weights .* map(convolve_with_PSF, PSFs, spectrum))
+    image
+end
+
+function make_image_from_3D(object, incidents, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    δ_Δz = get_discretized_δ_function(imghp.smoothness_order, imghp.PSF_Δz)
+    PSF_zcoords = get_PSF_zcoords(imghp)
+    #Tmap_interp_3D = zeros(imghp.PSF_zlen, imghp.objN, imghp.objN) 
+    C_interp_3D = zeros(imghp.objN, imghp.objN, imghp.PSF_zlen) 
+    Tmap_indices =  CartesianIndices((1:imghp.objN, 1:imghp.objN))
+    for Tmap_idx in Tmap_indices
+        z = object.zmap[Tmap_idx]
+        PSF_zlower_idx = searchsortedlast(PSF_zcoords,z)
+        PSF_zlower = PSF_zcoords[PSF_zlower_idx]
+        PSF_zupper_idx = PSF_zlower_idx + 1
+        PSF_zupper = PSF_zcoords[PSF_zupper_idx]
+
+        C_zlower = δ_Δz(PSF_zlower - z)
+        C_zupper = δ_Δz(PSF_zupper - z)
+        C_interp_3D[Tmap_idx, PSF_zlower_idx] = C_zlower
+        C_interp_3D[Tmap_idx, PSF_zupper_idx] = C_zupper
+    end
+    B = get_black_body_spectrum(object.Tmap, php)
+
+    image = zeros(imghp.imgN, imghp.imgN)
+    for PSF_idx = eachindex(PSF_zcoords)
+        spectrum = [b .* C_interp_3D[:, :, PSF_idx] for b in B]
+        image_at_z = make_image_at_z(spectrum, incidents, geoms, n2f_kernels, php, imghp)
+        image = image + image_at_z 
+    end
+    # TODO: need to add noise # actually I think noise should be added in a separate function
+    # TODO: rewrite in-place operations
     image
 end
