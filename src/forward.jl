@@ -69,6 +69,11 @@ function get_incident_field(freq, z, php::PhysicsHyperParams)
     incident
 end
 
+function get_incident_fields(freqs, PSF_zcoords, php::PhysicsHyperParams)
+    incidents = [get_incident_field(freq, z, php) for freq in freqs, z in PSF_zcoords]
+    incidents
+end
+
 function get_near_field(incident_field, surrogate, geoms, sampleN)
     near = incident_field .* surrogate.(geoms)
     near = repeat(near, inner=(sampleN, sampleN))
