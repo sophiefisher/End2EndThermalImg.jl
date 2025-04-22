@@ -175,7 +175,7 @@ function get_black_body_spectrum(Tmap_zslice, php::PhysicsHyperParams)
 end
 
 # fixed freq and fixed z
-function convolve_PSF_with_b(PSF, b_freqslice)
+function convolve_with_PSF(PSF, b_freqslice)
     fftPSF = planned_fft(PSF)
     out = real.(convolve(b_freqslice, fftPSF))
     out
