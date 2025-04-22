@@ -96,7 +96,7 @@ function n2f_kernel(freq, z, ϵ, μ, n2f_size, unit_cell_length, sampleN)
     end
 
     gridout = range(-(n2f_size ÷ 2), (n2f_size ÷ 2) - 1, length = n2f_size  ) .* (unit_cell_length / sampleN)
-    n2f_kernel = planned_fft([efield(x, y) * -μ / ϵ for x in gridout, y in gridout])
+    n2f_kernel = planned_fft!([efield(x, y) * -μ / ϵ for x in gridout, y in gridout])
     n2f_kernel
 end
 
