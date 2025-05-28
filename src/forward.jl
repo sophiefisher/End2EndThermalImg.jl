@@ -125,6 +125,7 @@ function near_to_far_field(near_field, n2f_kernel)
     far
 end
 
+# TODO: should I really be dividing by freq to get photon count here?
 function far_field_to_PSF(far_field, freq, unit_cell_length, binN, sampleN)
     far_field_abs = abs.(far_field).^2
     psfN = size(far_field, 1) ÷ sampleN ÷ binN
