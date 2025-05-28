@@ -7,12 +7,12 @@ end
 end   
 
 function planned_fft(x)
-    plan = make_plan(size(x))
+    plan = ChainRulesCore.ignore_derivatives( ()-> make_plan(size(x)) )
     plan * x
 end
 
 function planned_ifft(x)
-    plan = make_plan(size(x))
+    plan = ChainRulesCore.ignore_derivatives( ()-> make_plan(size(x)) )
     plan \ x
 end
 
