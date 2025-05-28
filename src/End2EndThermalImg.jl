@@ -27,6 +27,9 @@ module End2EndThermalImg
     using LaTeXStrings
     using Distributed
     using QuadratureRules
+    using InteractiveUtils
+    using Zygote
+    using ChainRulesCore
 
     const c = 299792458
     const ħ = 6.62607015e-34
