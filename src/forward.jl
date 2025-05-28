@@ -84,18 +84,18 @@ function get_near_field(incident_field, surrogate, geoms, imghp::ImagingHyperPar
 end
 
 # TODO: implement absolute scaling factor for the green's functions
+# TODO: i think i can drop the -1 term
+function efield_n2f_greens(x, y, z, k, ϵ, μ)
+    r = √(x^2 + y^2 + z^2)
+    z * (-1 + k * r * im) * ℯ ^ (k * r * im) / (4 * π * r^3) * (-μ / ϵ)
+end
+
 function n2f_kernel(freq, z, ϵ, μ, n2f_size, unit_cell_length, sampleN)
     ω = 2 * π * freq
     n = √(ϵ*μ)
     k = n * ω
-
-    function efield(x, y)
-        r = √(x^2 + y^2 + z^2)
-        z * (-1 + k * r * im) * ℯ ^ (k * r * im) / (4 * π * r^3)
-    end
-
     gridout = range(-(n2f_size ÷ 2), (n2f_size ÷ 2) - 1, length = n2f_size  ) .* (unit_cell_length / sampleN)
-    n2f_kernel = planned_fft!([efield(x, y) * -μ / ϵ for x in gridout, y in gridout])
+    n2f_kernel = planned_fft!([efield_n2f_greens(x, y, z, k, ϵ, μ) for x in gridout, y in gridout])
     n2f_kernel
 end
 
