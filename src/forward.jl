@@ -149,8 +149,21 @@ function get_PSF(freq, incident, surrogate, geoms, n2f_kernel, php::PhysicsHyper
     PSF
 end
 
-# smoothness_order = 0 yields the triangle function
-function get_discretized_δ_function(smoothness_order, Δz)
+function get_PSFs_at_z(freqs, incidents_at_z, surrogates, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    [get_PSF(freqs[iF], incidents_at_z[iF], surrogates[iF], geoms, n2f_kernels[iF], php, imghp) for iF in eachindex(freqs)]
+end
+
+function get_PSFs(freqs, incidents, surrogates, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    PSF_zlen = imghp.PSF_zlen
+    #[get_PSF(freqs[iF], incidents[iF, iZ], surrogates[iF], geoms, n2f_kernels[iF], php, imghp) for iF in eachindex(freqs), iZ in 1:PSF_zlen]
+    pmap(CartesianIndices((eachindex(freqs),1:PSF_zlen))) do i 
+        iF = i[1]
+        iZ = i[2]
+        get_PSF(freqs[iF], incidents[iF, iZ], surrogates[iF], geoms, n2f_kernels[iF], php, imghp)
+    end
+end
+
+function f_δ(smoothness_order, z)
     if smoothness_order == Inf
         f = z -> z > 0 ? exp(-1 / z) : 0
     else
