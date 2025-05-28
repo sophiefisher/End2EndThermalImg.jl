@@ -46,18 +46,17 @@ function convolve(inp, kernel)
     out
 end
 
+function efield_point_source(x, y, z, k)
+    r = √(x^2 + y^2 + z^2) 
+    ℯ ^ (k * r * im) / ( 4 * π * r)
+end
+
 # z is the distance between the object plane and the metasurface
 function incident_field(freq, z, n, num_unit_cells, unit_cell_length)
     ω = 2 * π * freq
     k = n * ω
-
-    function efield(x, y)
-        r = √(x^2 + y^2 + z^2) 
-        ℯ ^ (k * r * im) / ( 4 * π * r)
-    end
-
     grid = range(-num_unit_cells / 2 + 0.5, num_unit_cells / 2 - 0.5, length = num_unit_cells) .* unit_cell_length
-    incident = [efield(x, y) for x in grid, y in grid]
+    incident = [efield_point_source(x, y, z, k) for x in grid, y in grid]
     incident
 end
 
