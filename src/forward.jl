@@ -165,11 +165,15 @@ end
 
 function f_δ(smoothness_order, z)
     if smoothness_order == Inf
-        f = z -> z > 0 ? exp(-1 / z) : 0
+        return z > 0.0 ? exp(-1 / z) : 0.0
     else
-        f = z -> z > 0 ? z^(smoothness_order + 1) : 0
+        return z > 0.0 ? z^(smoothness_order + 1) : 0.0
     end
-    g = z -> f(z) / ( f(z) + f(1-z) )
+end
+
+# smoothness_order = 0 yields the triangle function
+function get_discretized_δ_function(smoothness_order, Δz)
+    g = z -> f_δ(smoothness_order, z) / ( f_δ(smoothness_order, z) + f_δ(smoothness_order, 1-z) )
     δ = z -> (-g(z ./ Δz) - g(-z ./ Δz) + 1) .* (1/Δz)
     δ
 end
