@@ -250,6 +250,7 @@ function make_image_from_3D_inplace(object, incidents, geoms, n2f_kernels, php::
     image
 end
 
+# TODO: pass the variables wrapped in ignore_derivatives to the function directly
 function make_image_from_3D_oop(object, incidents, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
     δ_Δz = ChainRulesCore.ignore_derivatives( ()-> get_discretized_δ_function(imghp.smoothness_order, imghp.PSF_Δz))
     PSF_zcoords = ChainRulesCore.ignore_derivatives( ()-> get_PSF_zcoords(imghp))
