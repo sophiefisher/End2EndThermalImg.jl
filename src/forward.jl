@@ -142,7 +142,7 @@ function far_field_to_PSF(far_field, freq, php::PhysicsHyperParams, imghp::Imagi
     far_field_to_PSF(far_field, freq, php.unit_cell_length, imghp.binN, imghp.sampleN)
 end
 
-function get_PSF(freq, incident, surrogate, geoms, n2f_kernel, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+function get_PSF_at_freq_and_z(freq, incident, surrogate, geoms, n2f_kernel, php::PhysicsHyperParams, imghp::ImagingHyperParams)
     near = get_near_field(incident, surrogate, geoms, imghp)
     far = near_to_far_field(near, n2f_kernel)
     PSF = far_field_to_PSF(far, freq, php, imghp)
@@ -150,7 +150,7 @@ function get_PSF(freq, incident, surrogate, geoms, n2f_kernel, php::PhysicsHyper
 end
 
 function get_PSFs_at_z(freqs, incidents_at_z, surrogates, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
-    [get_PSF(freqs[iF], incidents_at_z[iF], surrogates[iF], geoms, n2f_kernels[iF], php, imghp) for iF in eachindex(freqs)]
+    [get_PSF_at_freq_and_z(freqs[iF], incidents_at_z[iF], surrogates[iF], geoms, n2f_kernels[iF], php, imghp) for iF in eachindex(freqs)]
 end
 
 function get_PSFs(freqs, incidents, surrogates, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
@@ -159,7 +159,7 @@ function get_PSFs(freqs, incidents, surrogates, geoms, n2f_kernels, php::Physics
     pmap(CartesianIndices((eachindex(freqs),1:PSF_zlen))) do i 
         iF = i[1]
         iZ = i[2]
-        get_PSF(freqs[iF], incidents[iF, iZ], surrogates[iF], geoms, n2f_kernels[iF], php, imghp)
+        get_PSF_at_freq_and_z(freqs[iF], incidents[iF, iZ], surrogates[iF], geoms, n2f_kernels[iF], php, imghp)
     end
 end
 
