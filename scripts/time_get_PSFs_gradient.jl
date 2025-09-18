@@ -48,7 +48,7 @@ jhp = JobHyperParams(
 )
 
 object = End2EndThermalImg.get_object(imghp)
-geoms = End2EndThermalImg.initialize_geoms(jhp)
+geoms = End2EndThermalImg.initialize_geoms(php, opthp)
 PSF_zcoords = End2EndThermalImg.get_PSF_zcoords(imghp)
 
 B = End2EndThermalImg.get_black_body_spectrum(object.Tmap, php)
