@@ -206,9 +206,9 @@ function get_wavcen(λlb_μm, λub_μm)
     wavcen
 end
 
-function initialize_geoms(jhp::JobHyperParams)
-    geoms_init_type = jhp.opthp.geoms_init_type
-    @unpack num_unit_cells, pillar_width_lb, pillar_width_ub = jhp.php
+function initialize_geoms(php::PhysicsHyperParams, opthp::OptimizeHyperParams)
+    geoms_init_type = opthp.geoms_init_type
+    @unpack num_unit_cells, pillar_width_lb, pillar_width_ub = php
     
     if geoms_init_type == "uniform"
         return fill((pillar_width_lb + pillar_width_ub)/2, num_unit_cells, num_unit_cells)
