@@ -251,6 +251,10 @@ end
 
 function initialize_geoms(php::PhysicsHyperParams, opthp::OptimizeHyperParams)
     geoms_init_type = opthp.geoms_init_type
+    initialize_geoms(php, geoms_init_type)
+end
+
+function initialize_geoms(php::PhysicsHyperParams, geoms_init_type)
     @unpack num_unit_cells, pillar_width_lb, pillar_width_ub = php
     
     if geoms_init_type == "uniform"
