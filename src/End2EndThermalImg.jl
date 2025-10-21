@@ -1,10 +1,5 @@
 module End2EndThermalImg
 
-    # prepare.jl
-    export PhysicsHyperParams, ImagingHyperParams, OptimizeHyperParams, ReconstructionHyperParams, JobHyperParams
-    export UniformlyRandomObject
-    export get_wavcen
-    
     # surrogate.jl
     export get_transmission
     export compute_and_save_surrogate_transmission_matrix
@@ -61,5 +56,6 @@ module End2EndThermalImg
     include("optimize.jl")
     include("process.jl")
     include("surrogate.jl")
+    include("inversedesign.jl")
 
 end
