@@ -146,6 +146,45 @@ function ImagingHyperParams(;
     )
 end
 
+# TODO: write descriptions
+struct GaussianObject{FloatType <: AbstractFloat} <: AbstractObjectType
+    Tlb::FloatType 
+    Tub::FloatType
+    std_dev_T::FloatType
+    zlb_μm::FloatType 
+    zub_μm::FloatType 
+    std_dev_z::FloatType
+
+    # Computed parameters
+    zlb::FloatType
+    zub::FloatType
+end
+
+function GaussianObject(; 
+    Tlb::FloatType, 
+    Tub::FloatType,
+    std_dev_T::FloatType,
+    zlb_μm::FloatType,
+    zub_μm::FloatType,
+    std_dev_z::FloatType,
+    php::PhysicsHyperParams
+) where {FloatType <: AbstractFloat}
+    wavcen = php.wavcen
+    zlb = zlb_μm / wavcen
+    zub = zub_μm / wavcen
+
+    return GaussianObject{FloatType}(
+        Tlb,
+        Tub,
+        std_dev_T,
+        zlb_μm,
+        zub_μm,
+        std_dev_z,
+        zlb,
+        zub
+    )
+end
+
 # uniformly random Tmap and uniformly random depth map (within bounds)
 struct UniformlyRandomObject{FloatType <: AbstractFloat, IntType <: Integer} <: AbstractObjectType
     Tlb::FloatType 
