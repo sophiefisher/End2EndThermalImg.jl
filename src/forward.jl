@@ -197,43 +197,22 @@ function get_black_body_spectrum(Tmap_zslice, php::PhysicsHyperParams)
     b
 end
 
-# fixed freq and fixed z
-function convolve_with_PSF(PSF, b_freqslice)
-    fftPSF = planned_fft(PSF)
-    out = real.(convolve(b_freqslice, fftPSF))
-    out
-end
+convolve_with_fftPSF_at_freq_and_z(fftPSF_at_freq_and_z, b_at_freq_and_z) = real.(convolve(b_at_freq_and_z, fftPSF_at_freq_and_z))
 
-function make_image_at_z(spectrum, incidents_at_z, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
-    # b = get_black_body_spectrum(Tmap_zslice, php)
-    freqs = ChainRulesCore.ignore_derivatives( ()-> get_freq_chebpoints(php))
-    surrogates = ChainRulesCore.ignore_derivatives( ()-> load_surrogate_models(php))
-    weights = ChainRulesCore.ignore_derivatives( ()-> get_clenshaw_curtis_quadrature_weights(php))
-    PSFs = ChainRulesCore.ignore_derivatives( ()-> get_PSFs_at_z(freqs, incidents_at_z, surrogates, geoms, n2f_kernels, php, imghp))
-    image = sum(weights .* map(convolve_with_PSF, PSFs, spectrum))
+function make_image_at_z(spectrum_at_z, fftPSFs_at_z, weights)
+    image = sum(weights .* map(convolve_with_fftPSF_at_freq_and_z, fftPSFs_at_z, spectrum_at_z))
     image
 end
 
-function make_image_at_z(spectrum, freqs, incidents_at_z, surrogates, geoms, n2f_kernels, weights, php::PhysicsHyperParams, imghp::ImagingHyperParams)
-    PSFs = ChainRulesCore.ignore_derivatives( ()-> get_PSFs_at_z(freqs, incidents_at_z, surrogates, geoms, n2f_kernels, php, imghp))
-    image = sum(weights .* map(convolve_with_PSF, PSFs, spectrum))
-    image
-end
-
-function make_image_at_z(spectrum, PSFs, weights)
-    image = sum(weights .* map(convolve_with_PSF, PSFs, spectrum))
-    image
-end
-
-function make_image_from_3D_inplace(object, incidents, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+function make_image_from_3D!(image_buf, object, fftPSFs, weights, php::PhysicsHyperParams, imghp::ImagingHyperParams)
     δ_Δz = get_discretized_δ_function(imghp)
     PSF_zcoords = get_PSF_zcoords(imghp)
 
-    C_interp_3D = zeros(imghp.objN, imghp.objN, imghp.PSF_zlen) 
-    Tmap_indices =  CartesianIndices((1:imghp.objN, 1:imghp.objN))
+    C_interp_3D = zeros(imghp.objN, imghp.objN, imghp.PSF_zlen) # TODO: allocations
+    Tmap_indices = CartesianIndices((1:imghp.objN, 1:imghp.objN))
     for Tmap_idx in Tmap_indices
         z = object.zmap[Tmap_idx]
-        PSF_zlower_idx = searchsortedlast(PSF_zcoords,z)
+        PSF_zlower_idx = searchsortedlast(PSF_zcoords, z)
         PSF_zlower = PSF_zcoords[PSF_zlower_idx]
         PSF_zupper_idx = PSF_zlower_idx + 1
         PSF_zupper = PSF_zcoords[PSF_zupper_idx]
@@ -245,25 +224,21 @@ function make_image_from_3D_inplace(object, incidents, geoms, n2f_kernels, php::
     end
     B = get_black_body_spectrum(object.Tmap, php)
 
-    image = zeros(imghp.imgN, imghp.imgN)
-    for iZ = eachindex(PSF_zcoords)
-        spectrum = [b .* C_interp_3D[:, :, iZ] for b in B]
-        image_at_z = make_image_at_z(spectrum, incidents[:, iZ], geoms, n2f_kernels, php, imghp)
-        image = image + image_at_z 
+    fill!(image_buf, 0.0)
+    @views for iZ in eachindex(PSF_zcoords)
+        spectrum = [b .* C_interp_3D[:, :, iZ] for b in B]  # TODO: allocations
+        image_at_z = make_image_at_z(spectrum, fftPSFs[:, iZ], weights) # TODO: allocations
+        @. image_buf += image_at_z
     end
-    # TODO: need to add noise # actually I think noise should be added in a separate function
-    # TODO: rewrite in-place operations
-    image
+    return image_buf
 end
 
 # TODO: pass the variables wrapped in ignore_derivatives to the function directly
-function make_image_from_3D_oop(object, incidents, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+function make_image_from_3D(object, fftPSFs, weights, php::PhysicsHyperParams, imghp::ImagingHyperParams)
     δ_Δz = ChainRulesCore.ignore_derivatives( ()-> get_discretized_δ_function(imghp.smoothness_order, imghp.PSF_Δz))
     PSF_zcoords = ChainRulesCore.ignore_derivatives( ()-> get_PSF_zcoords(imghp))
-    freqs = ChainRulesCore.ignore_derivatives( ()-> get_freq_chebpoints(php))
-    surrogates = ChainRulesCore.ignore_derivatives( ()-> load_surrogate_models(php))
-    weights = ChainRulesCore.ignore_derivatives( ()-> get_clenshaw_curtis_quadrature_weights(php))
 
+    # TODO: turn repeated code into function (see make_image_from_3D!)
     C_interp_3D = [let
         z = object.zmap[Tmap_idx1, Tmap_idx2]
         PSF_zlower_idx = searchsortedlast(PSF_zcoords, z)
@@ -281,10 +256,9 @@ function make_image_from_3D_oop(object, incidents, geoms, n2f_kernels, php::Phys
     image = sum(
         iZ -> begin
             spectrum = [b .* C_interp_3D[:, :, iZ] for b in B]
-            image_at_z = make_image_at_z(spectrum, freqs, incidents[:, iZ], surrogates, geoms, n2f_kernels, weights, php, imghp)
+            image_at_z = make_image_at_z(spectrum, fftPSFs[:, iZ], weights)
         end,
     eachindex(PSF_zcoords))
-    # TODO: need to add noise # actually I think noise should be added in a separate function
     image
 end
 
