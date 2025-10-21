@@ -271,6 +271,19 @@ function initialize_object(imghp::ImagingHyperParams, rechp::ReconstructionHyper
         return (; Tmap, zmap)
     end
 end
+
+gaussian_2D(x, y, offset, amplitude, std_dev) = offset + amplitude*exp(-(x^2 + y^2) / (2*std_dev^2))
+
+function get_object(object_type::GaussianObject, imghp::ImagingHyperParams)
+    N = imghp.objN
+    coords = collect(-div(N,2):div(N-1,2))
+    X = repeat(coords, 1, N)
+    Y = repeat(coords', N, 1)
+    Tmap = gaussian_2D.(X, Y, object_type.Tlb, (object_type.Tub - object_type.Tlb), object_type.std_dev_T)
+    zmap = gaussian_2D.(X, Y, object_type.zlb, (object_type.zub - object_type.zlb),  object_type.std_dev_z)
+    (; Tmap, zmap)
+end
+
 # TODO: not sure this will work in general (see GaussianObject); need to redefine
 get_object_zrange(object_type::AbstractObjectType) = LinRange(object_type.zlb, object_type.zub, object_type.zlen)
 
