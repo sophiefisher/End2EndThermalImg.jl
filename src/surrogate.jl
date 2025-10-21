@@ -106,6 +106,13 @@ function load_surrogate_models(php::PhysicsHyperParams)
     return surrogates
 end
 
+function load_surrogate_model_at_freq(php::PhysicsHyperParams, freq_idx)
+    filepath = get_surrogate_filename(php)
+    transmission_matrix = Matrix(CSV.read(filepath, DataFrame, types=Complex{Float64}))::Matrix{ComplexF64}
+    surrogate = chebinterp(transmission_matrix[:,freq_idx], php.pillar_width_lb, php.pillar_width_ub)::FastChebInterp.ChebPoly{1, ComplexF64, Float64}
+    return surrogate
+end
+
 function plot_surrogate_models(php::PhysicsHyperParams)
     datetime = now()
     surrogates = load_surrogate_models(php)
