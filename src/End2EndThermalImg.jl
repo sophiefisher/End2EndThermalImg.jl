@@ -30,6 +30,12 @@ module End2EndThermalImg
     using InteractiveUtils
     using Zygote
     using ChainRulesCore
+    using NLopt
+    using JLD2
+    using ColorSchemes
+    using Statistics
+    using Random
+    using LinearAlgebra
 
     const c = 299792458
     const ħ = 6.62607015e-34
