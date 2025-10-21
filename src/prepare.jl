@@ -231,8 +231,9 @@ end
     geoms_init_type::String # how to initialize the metasurface for the end-to-end
 end
 
-@with_kw struct ReconstructionHyperParams
-    T_init_type::String # how to initialize the temperature map for reconstruction
+@with_kw struct ReconstructionHyperParams{FloatType <: AbstractFloat}
+    object_init_type::String # how to initialize the object for reconstruction
+    T_background::FloatType
 end
 
 @with_kw struct JobHyperParams
