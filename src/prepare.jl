@@ -191,13 +191,13 @@ struct UniformlyRandomObject{FloatType <: AbstractFloat, IntType <: Integer} <: 
     Tub::FloatType
     zlb_μm::FloatType # lower bound z coordinate of the object (assumes the metasurface is at z = 0, so this should be negative)
     zub_μm::FloatType # upper bound z coordinate of the object (assumes the metasurface is at z = 0, so this should be negative)
-    zlen::IntType 
+    zlen::IntType # TODO: define zlen
 
     # Computed parameters
     zlb::FloatType
     zub::FloatType
-    Δz_μm::FloatType
-    Δz::FloatType
+    Δz_μm::FloatType # TODO: do I need this? write description?
+    Δz::FloatType # TODO: do I need this? write description?
 end
 
 function UniformlyRandomObject(; 
