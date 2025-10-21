@@ -9,6 +9,13 @@ module End2EndThermalImg
     export get_transmission
     export compute_and_save_surrogate_transmission_matrix
 
+    # prepare.jl
+    export PhysicsHyperParams, ImagingHyperParams, OptimizeHyperParams, ReconstructionHyperParams, JobHyperParams
+    export UniformlyRandomObject, GaussianObject
+    export get_wavcen
+
+    # forward.jl
+
     # python modules
     export grcwa
     export numpy
