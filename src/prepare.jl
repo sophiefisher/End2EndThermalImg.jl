@@ -271,6 +271,7 @@ function initialize_object(imghp::ImagingHyperParams, rechp::ReconstructionHyper
         return (; Tmap, zmap)
     end
 end
+# TODO: not sure this will work in general (see GaussianObject); need to redefine
 get_object_zrange(object_type::AbstractObjectType) = LinRange(object_type.zlb, object_type.zub, object_type.zlen)
 
 function get_object(object_type::UniformlyRandomObject, imghp::ImagingHyperParams)
