@@ -162,6 +162,13 @@ function get_PSFs(freqs, incidents, surrogates, geoms, n2f_kernels, php::Physics
     end
 end
 
+get_fftPSF(PSF) = planned_fft(complex.(PSF))
+
+function get_fftPSFs(freqs, incidents, surrogates, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    PSFs = get_PSFs(freqs, incidents, surrogates, geoms, n2f_kernels, php, imghp)
+    fftPSFs = get_fftPSF.(PSFs)
+end
+
 function f_δ(smoothness_order, z)
     if smoothness_order == Inf
         return z > 0.0 ? exp(-1 / z) : 0.0
