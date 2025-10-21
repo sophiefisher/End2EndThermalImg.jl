@@ -119,6 +119,7 @@ function ImagingHyperParams(;
     PSF_zlen::IntType,
     smoothness_order::FloatType,
     object_type::AbstractObjectType,
+    noise_level::FloatType,
     php::PhysicsHyperParams
 ) where {FloatType <: AbstractFloat, IntType <: Integer}
     wavcen = php.wavcen
@@ -137,6 +138,7 @@ function ImagingHyperParams(;
         PSF_zlen,
         smoothness_order,
         object_type,
+        noise_level,
         PSF_zlb,
         PSF_zub,
         PSF_Δz_μm,
