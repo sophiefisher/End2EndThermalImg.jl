@@ -258,6 +258,19 @@ function initialize_geoms(php::PhysicsHyperParams, opthp::OptimizeHyperParams)
     end
 end
 
+function initialize_object(imghp::ImagingHyperParams, rechp::ReconstructionHyperParams)
+    @unpack objN = imghp
+    @unpack object_init_type, T_background = rechp
+    PSF_zcoords = get_PSF_zcoords(imghp)
+
+    if object_init_type == "uniform"
+        Tmap = fill(T_background, objN, objN)
+        center_zcoord_idx = cld(length(PSF_zcoords), 2)
+        center_zcoord = PSF_zcoords[center_zcoord_idx]
+        zmap = fill(center_zcoord, objN, objN)
+        return (; Tmap, zmap)
+    end
+end
 get_object_zrange(object_type::AbstractObjectType) = LinRange(object_type.zlb, object_type.zub, object_type.zlen)
 
 function get_object(object_type::UniformlyRandomObject, imghp::ImagingHyperParams)
