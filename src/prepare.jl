@@ -280,3 +280,20 @@ function get_clenshaw_curtis_quadrature_weights(php::PhysicsHyperParams)
     weights = ClenshawCurtisQuadrature(php.freq_order + 1).weights .* (php.frequb .- php.freqlb)
     weights
 end
+
+unflatten_square_matrix(matrix_flat) = reshape(matrix_flat, round(Int, sqrt(length(matrix_flat))), round(Int, sqrt(length(matrix_flat))))
+
+flatten_object(object) = [object.Tmap[:]; object.zmap[:]]
+
+function unflatten_object(object_flat)
+    N = length(object_flat) ÷ 2  
+    Tmap_flat = object_flat[1:N]
+    Tmap = unflatten_square_matrix(Tmap_flat)
+    zmap_flat = object_flat[N+1:end]
+    zmap = unflatten_square_matrix(zmap_flat)
+    (; Tmap, zmap)
+end
+
+prepare_noise_buf(imghp) = Array{Float64}(undef, imghp.imgN, imghp.imgN)
+
+prepare_image_buf(imghp) = Array{Float64}(undef, imghp.imgN, imghp.imgN)
