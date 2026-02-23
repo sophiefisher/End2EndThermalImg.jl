@@ -114,6 +114,11 @@ function plot_object(object; figsize_x = DEFAULT_FIGSIZE_X,
     return fig, ax
 end
 
+function image_axis!(ax)
+    ax.set_xticks(Float64[])
+    ax.set_yticks(Float64[])
+end
+
 function plot_reconstruction_results(object, object_opt;
                                      figsize_x = DEFAULT_FIGSIZE_X,
                                      figsize_y = DEFAULT_FIGSIZE_Y,
@@ -135,28 +140,28 @@ function plot_reconstruction_results(object, object_opt;
 
     im10 = ax[1,0].imshow(object.zmap, cmap = ColorMap(colorschemes[:devon].colors), vmin = zmin, vmax = zmax)
     ax[1,0].set_title(L"$z(x,y)$ [ground truth]")
-    fig.colorbar(im10, ax=ax[1,0])
-    ax[1,0].axis("off")
+    fig.colorbar(im10, ax=ax[1,0], label="z (unitless)")
+    image_axis!(ax[1,0])
 
     im01 = ax[0,1].imshow(object_opt.Tmap, cmap = "magma", vmin = Tmin, vmax = Tmax)
     ax[0,1].set_title(L"$T_{est}(x,y)$ [reconstrcted]")
-    fig.colorbar(im01, ax=ax[0,1])
-    ax[0,1].axis("off")
+    fig.colorbar(im01, ax=ax[0,1], label="T (Kelvin)")
+    image_axis!(ax[0,1])
 
     im11 = ax[1,1].imshow(object_opt.zmap, cmap = ColorMap(colorschemes[:devon].colors), vmin = zmin, vmax = zmax)
     ax[1,1].set_title(L"$z_{est}(x,y)$ [reconstructed]")
-    fig.colorbar(im11, ax=ax[1,1])
-    ax[1,1].axis("off")
+    fig.colorbar(im11, ax=ax[1,1], label="z (unitless)")
+    image_axis!(ax[1,1])
 
-    im02 = ax[0,2].imshow((object.Tmap .- object_opt.Tmap).^2 ./ object.Tmap.^2, cmap = ColorMap(colorschemes[:grays].colors), vmin = 0)
+    im02 = ax[0,2].imshow((object.Tmap .- object_opt.Tmap).^2 ./ object.Tmap.^2, cmap = ColorMap(colorschemes[:grays].colors))
     ax[0,2].set_title(L"Relative square error $\frac{(T_i - T_{est_i})^2}{T_i^2}$")
     fig.colorbar(im02, ax=ax[0,2])
-    ax[0,2].axis("off")
+    image_axis!(ax[0,2])
 
-    im12 = ax[1,2].imshow((object.zmap .- object_opt.zmap).^2 ./ object.zmap.^2, cmap = ColorMap(colorschemes[:grays].colors), vmin = 0)
+    im12 = ax[1,2].imshow((object.zmap .- object_opt.zmap).^2 ./ object.zmap.^2, cmap = ColorMap(colorschemes[:grays].colors))
     ax[1,2].set_title(L"Relative square error $\frac{(z_i - z_{est_i})^2}{z_i^2}$")
     fig.colorbar(im12, ax=ax[1,2])
-    ax[1,2].axis("off")
+    image_axis!(ax[1,2])
 
     MSE_T = sum((object.Tmap .- object_opt.Tmap).^2) / sum(object.Tmap.^2)
     MSE_z = sum((object.zmap .- object_opt.zmap).^2) / sum(object.zmap.^2)
