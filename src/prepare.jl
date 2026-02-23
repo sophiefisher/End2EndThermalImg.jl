@@ -198,8 +198,8 @@ struct UniformlyRandomObject{FloatType <: AbstractFloat, IntType <: Integer} <: 
     # Computed parameters
     zlb::FloatType
     zub::FloatType
-    Δz_μm::FloatType # TODO: do I need this? write description?
-    Δz::FloatType # TODO: do I need this? write description?
+    Δz_μm::FloatType # TODO: is this actually used anywhere? # Δz of the z range (in units of µm)
+    Δz::FloatType # TODO: is this actually used anywhere? # Δz of the z range (unitless)
 end
 
 function UniformlyRandomObject(; 
