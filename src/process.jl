@@ -181,13 +181,13 @@ function plot_reconstruction_results(object, object_opt;
     return fig, ax
 end
 
-function plot_noisy_image(noisy_image, imghp; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y, fontsize = DEFAULT_FONTSIZE)
+function plot_image(image, imghp; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y, fontsize = DEFAULT_FONTSIZE, scale_image_to_object = false, extra_title = "")
     matplotlib.rcParams["font.size"] = fontsize
-    image_scale_factor = imghp.imgN / imghp.objN
+    image_scale_factor = scale_image_to_object ? imghp.imgN / imghp.objN : 1
     fig, ax = subplots(1, 1, figsize=(image_scale_factor*figsize_x, image_scale_factor*figsize_y))
 
-    im = ax.imshow(noisy_image)
-    ax.set_title("Noisy image")
+    im = ax.imshow(image)
+    ax.set_title("Image $(extra_title)")
     ax.axis("off")
     cbar = fig.colorbar(im, ax=ax, cmap = "viridis")
 
