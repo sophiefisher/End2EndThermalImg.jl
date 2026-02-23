@@ -98,6 +98,7 @@ struct ImagingHyperParams{FloatType <: AbstractFloat, IntType <: Integer}
     PSF_zlb_μm::FloatType
     PSF_zub_μm::FloatType
     PSF_zlen::IntType
+    PSF_scale::FloatType
     smoothness_order::FloatType # smoothness order of the discretized δ function
     object_type::AbstractObjectType # type of object to generate
     noise_level # noise percentage of the mean image
@@ -117,6 +118,7 @@ function ImagingHyperParams(;
     PSF_zlb_μm::FloatType,
     PSF_zub_μm::FloatType,
     PSF_zlen::IntType,
+    PSF_scale::FloatType,
     smoothness_order::FloatType,
     object_type::AbstractObjectType,
     noise_level::FloatType,
@@ -136,6 +138,7 @@ function ImagingHyperParams(;
         PSF_zlb_μm,
         PSF_zub_μm,
         PSF_zlen,
+        PSF_scale,
         smoothness_order,
         object_type,
         noise_level,
