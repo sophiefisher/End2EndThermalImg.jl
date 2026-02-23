@@ -260,10 +260,32 @@ end
     geoms_init_type::String # how to initialize the metasurface for the end-to-end
 end
 
-@with_kw struct ReconstructionHyperParams{FloatType <: AbstractFloat}
+struct ReconstructionHyperParams{FloatType <: AbstractFloat}
     object_init_type::String # how to initialize the object for reconstruction
     T_background::FloatType
+    z_middle_μm::FloatType
+
+    # Computed parameters
+    z_middle::FloatType
 end
+
+function ReconstructionHyperParams(; 
+    object_init_type::String,
+    T_background::FloatType,
+    z_middle_μm::FloatType,
+    php::PhysicsHyperParams
+) where {FloatType <: AbstractFloat}
+    wavcen = php.wavcen
+    z_middle = z_middle_μm / wavcen
+    
+    return ReconstructionHyperParams{FloatType}(
+        object_init_type,
+        T_background,
+        z_middle_μm,
+        z_middle
+    )
+end
+
 
 @with_kw struct JobHyperParams
     php::PhysicsHyperParams
