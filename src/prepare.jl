@@ -151,16 +151,16 @@ end
 
 # TODO: write descriptions
 struct GaussianObject{FloatType <: AbstractFloat} <: AbstractObjectType
-    Tlb::FloatType 
-    Tub::FloatType
-    std_dev_T::FloatType
-    zlb_μm::FloatType 
-    zub_μm::FloatType 
-    std_dev_z::FloatType
+    Tlb::FloatType # offset of the gaussian in temperature (in units of Kelvin)
+    Tub::FloatType # peak of the gaussian in temperature (in units of Kelvin)
+    std_dev_T::FloatType # standard deviation of the gaussian in temperature (in units of Kelvin)
+    zlb_μm::FloatType # offset of the gaussian in z (in units of μm)
+    zub_μm::FloatType # peak of the gaussian in z (in units of μm)
+    std_dev_z::FloatType # standard deviation of the gaussian in z (in units of μm)
 
     # Computed parameters
-    zlb::FloatType
-    zub::FloatType
+    zlb::FloatType # offset of the gaussian in z (unitless)
+    zub::FloatType # peak of the gaussian in z (unitless)
 end
 
 function GaussianObject(; 
