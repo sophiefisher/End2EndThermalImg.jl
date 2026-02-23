@@ -195,9 +195,38 @@ end
 
 get_fftPSF(PSF) = planned_fft(complex.(PSF))
 
-function get_fftPSFs(freqs, incidents, surrogates, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
-    PSFs = get_PSFs(freqs, incidents, surrogates, geoms, n2f_kernels, php, imghp)
-    fftPSFs = get_fftPSF.(PSFs)
+function get_fftPSFs_distributed(freqs, incidents, surrogates, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    PSF_zlen = imghp.PSF_zlen
+    pmap(CartesianIndices((eachindex(freqs),1:PSF_zlen))) do i 
+        iF = i[1]
+        iZ = i[2]
+        get_fftPSF(get_PSF_at_freq_and_z(freqs[iF], incidents[iF, iZ], surrogates[iF], geoms, n2f_kernels[iF], php, imghp))
+    end
+end
+
+function get_fftPSFs_threaded(freqs, incidents, surrogates, geoms, n2f_kernels,
+                           php::PhysicsHyperParams, imghp::ImagingHyperParams)
+
+    PSF_zlen = imghp.PSF_zlen
+    nF = length(freqs)
+    PSFs = Matrix{Matrix{ComplexF64}}(undef, nF, PSF_zlen)
+    inds = CartesianIndices((1:nF, 1:PSF_zlen))
+
+    Threads.@threads for idx in eachindex(inds)
+        I = inds[idx]
+        iF, iZ = I[1], I[2]
+
+        PSFs[iF, iZ] = get_fftPSF(get_PSF_at_freq_and_z(
+            freqs[iF],
+            incidents[iF, iZ],
+            surrogates[iF],
+            geoms,
+            n2f_kernels[iF],
+            php,
+            imghp
+        ))
+    end
+    return PSFs
 end
 
 function f_δ(smoothness_order, z)
