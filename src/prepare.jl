@@ -339,8 +339,7 @@ function get_object(object_type::GaussianObject, imghp::ImagingHyperParams)
     (; Tmap, zmap)
 end
 
-# TODO: not sure this will work in general (see GaussianObject); need to redefine
-get_object_zrange(object_type::AbstractObjectType) = LinRange(object_type.zlb, object_type.zub, object_type.zlen)
+get_object_zrange(object_type::UniformlyRandomObject) = LinRange(object_type.zlb, object_type.zub, object_type.zlen)
 
 function get_object(object_type::UniformlyRandomObject, imghp::ImagingHyperParams)
     Tmap = rand(object_type.Tlb:eps():object_type.Tub, imghp.objN, imghp.objN)
