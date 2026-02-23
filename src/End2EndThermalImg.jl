@@ -6,8 +6,8 @@ module End2EndThermalImg
 
     # prepare.jl
     export PhysicsHyperParams, ImagingHyperParams, OptimizeHyperParams, ReconstructionHyperParams, JobHyperParams
-    export UniformlyRandomObject, GaussianObject
-    export get_wavcen
+    export UniformlyRandomObject, UniformlyRandomTFixedDepthObject, GaussianObject
+    export flatten_object, get_wavcen
 
     # forward.jl
 
