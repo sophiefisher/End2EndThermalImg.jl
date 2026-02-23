@@ -377,7 +377,7 @@ function reconstruct_Tmap_and_zmap(noisy_image, fftPSFs, weights, α, β, jhp::J
     upper_bounds!(opt, [fill(Inf, imghp.objN^2); fill(imghp.PSF_zub, imghp.objN^2)])
     objective_lambda = object_flat -> reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, α, β, T_background, z_middle, php, imghp)
     objective_wrapped_lambda = (x, grad) -> nlopt_wrap_objective_autodiff(x, grad, objective_lambda, objective_history; iteration_print = iteration_print, verbose = verbose)
-    max_objective!(opt, objective_wrapped_lambda)
+    min_objective!(opt, objective_wrapped_lambda)
     xtol_rel!(opt, xtol_rel)
     maxeval!(opt, maxeval)
 
