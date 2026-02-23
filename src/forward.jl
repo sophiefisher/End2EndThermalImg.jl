@@ -268,6 +268,7 @@ function make_image_from_3D!(image_buf, object, fftPSFs, weights, php::PhysicsHy
     δ_Δz = get_discretized_δ_function(imghp)
     PSF_zcoords = get_PSF_zcoords(imghp)
 
+    # TODO: turn repeated code into function (see make_image_from_3D)
     C_interp_3D = zeros(imghp.objN, imghp.objN, imghp.PSF_zlen) # TODO: allocations
     Tmap_indices = CartesianIndices((1:imghp.objN, 1:imghp.objN))
     for Tmap_idx in Tmap_indices
