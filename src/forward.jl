@@ -382,7 +382,7 @@ function reconstruct_Tmap_and_zmap(noisy_image, fftPSFs, weights, α, β, jhp::J
     maxeval!(opt, maxeval)
 
     (objective_opt, object_opt_flat, return_value) = NLopt.optimize!(opt, object_init_flat)
-    verbose && @info "Done object reconsstruction"
+    verbose && @info "Done object reconstruction"
     verbose && @info "Optimization results" objective_opt return_value
     object_opt = unflatten_object(object_opt_flat)
     (; objective_opt, object_opt, return_value, objective_history)
