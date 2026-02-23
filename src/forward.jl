@@ -125,7 +125,7 @@ function near_to_far_field(near_field, n2f_kernel)
 end
 
 # TODO: should I really be dividing by freq to get photon count here?
-function far_field_to_PSF(far_field, freq, unit_cell_length, binN, sampleN)
+function far_field_to_PSF(far_field, freq, unit_cell_length, binN, sampleN, PSF_scale)
     far_field_abs = abs.(far_field).^2
     psfN = size(far_field, 1) ÷ sampleN ÷ binN
     far_field_abs_integrated = reshape(far_field_abs, (sampleN * binN, psfN, sampleN * binN, psfN))
@@ -133,12 +133,12 @@ function far_field_to_PSF(far_field, freq, unit_cell_length, binN, sampleN)
     # (unit_cell_length / sampleN) is the integration/sampling width for integrating over each subpixel
     # divide by freq to turn energy into photon count
     # TODO: to normalize correctly, also need to divide by factor of hbar here
-    PSF = dropdims(far_field_abs_integrated, dims=(1, 3)) .* (unit_cell_length / sampleN) ./ freq 
+    PSF = dropdims(far_field_abs_integrated, dims=(1, 3)) .* (unit_cell_length / sampleN) .* PSF_scale ./ freq 
     PSF
 end
 
 function far_field_to_PSF(far_field, freq, php::PhysicsHyperParams, imghp::ImagingHyperParams)
-    far_field_to_PSF(far_field, freq, php.unit_cell_length, imghp.binN, imghp.sampleN)
+    far_field_to_PSF(far_field, freq, php.unit_cell_length, imghp.binN, imghp.sampleN, imghp.PSF_scale)
 end
 
 function get_PSF_at_freq_and_z(freq, incident, surrogate, geoms, n2f_kernel, php::PhysicsHyperParams, imghp::ImagingHyperParams)

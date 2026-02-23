@@ -10,7 +10,7 @@ function ensure_inversedesign_folder()
 end
 
 # TODO: add verbose option; apply to wrap objective function and @info statements
-function design_monochromatic_lens(php, imghp; PSF_scale = 1e10, geoms_init_type = "uniform", xtol_rel = 1e-8, maxeval = 5000, iteration_print = 50, plot_PSFs = false, verbose = true)
+function design_monochromatic_lens(php, imghp; geoms_init_type = "uniform", xtol_rel = 1e-8, maxeval = 5000, iteration_print = 50, plot_PSFs = false, log_scale = true, verbose = true)
     datetime = now()
     verbose && @info "Designing monochromatic lens" datetime=datetime
     root = ensure_inversedesign_folder()
@@ -36,7 +36,7 @@ function design_monochromatic_lens(php, imghp; PSF_scale = 1e10, geoms_init_type
         geoms = unflatten_square_matrix(geoms_flat)
         PSF = get_PSF_at_freq_and_z(center_freq, incident, surrogate, geoms, n2f_kernel, php, imghp)
         center_PSF_idx = cld(size(PSF, 1), 2)
-        PSF[center_PSF_idx, center_PSF_idx] * PSF_scale
+        PSF[center_PSF_idx, center_PSF_idx]
     end
 
     objective_history = Float64[]
