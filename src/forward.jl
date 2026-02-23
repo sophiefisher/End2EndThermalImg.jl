@@ -273,7 +273,13 @@ function make_image_from_3D!(image_buf, object, fftPSFs, weights, php::PhysicsHy
     Tmap_indices = CartesianIndices((1:imghp.objN, 1:imghp.objN))
     for Tmap_idx in Tmap_indices
         z = object.zmap[Tmap_idx]
-        PSF_zlower_idx = searchsortedlast(PSF_zcoords, z)
+        if z == PSF_zcoords[end]
+            PSF_zlower_idx = imghp.PSF_zlen - 1
+            PSF_zupper_idx = imghp.PSF_zlen
+        else
+            PSF_zlower_idx = searchsortedlast(PSF_zcoords, z)
+            PSF_zupper_idx = PSF_zlower_idx + 1
+        end
         PSF_zlower = PSF_zcoords[PSF_zlower_idx]
         PSF_zupper_idx = PSF_zlower_idx + 1
         PSF_zupper = PSF_zcoords[PSF_zupper_idx]
