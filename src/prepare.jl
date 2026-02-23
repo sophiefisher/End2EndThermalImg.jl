@@ -229,6 +229,33 @@ function UniformlyRandomObject(;
     )
 end
 
+# uniformly random Tmap (within bounds) and at a fixed depth
+struct UniformlyRandomTFixedDepthObject{FloatType <: AbstractFloat} <: AbstractObjectType
+    Tlb::FloatType # lower bound of the temperature (in units of Kelvin)
+    Tub::FloatType # upper bound of the temperature (in units of Kelvin)
+    z_μm::FloatType # z coordinate of the object (assumes the metasurface is at z = 0, so this should be negative) (in units of μm)
+
+    # Computed parameters
+    z::FloatType
+end
+
+function UniformlyRandomTFixedDepthObject(; 
+    Tlb::FloatType, 
+    Tub::FloatType,
+    z_μm::FloatType,
+    php::PhysicsHyperParams
+) where {FloatType <: AbstractFloat}
+    wavcen = php.wavcen
+    z = z_μm / wavcen
+    
+    return UniformlyRandomTFixedDepthObject{FloatType}(
+        Tlb,
+        Tub,
+        z_μm,
+        z
+    )
+end
+
 @with_kw struct OptimizeHyperParams
     geoms_init_type::String # how to initialize the metasurface for the end-to-end
 end
