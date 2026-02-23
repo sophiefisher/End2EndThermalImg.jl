@@ -281,7 +281,6 @@ function make_image_from_3D!(image_buf, object, fftPSFs, weights, php::PhysicsHy
             PSF_zupper_idx = PSF_zlower_idx + 1
         end
         PSF_zlower = PSF_zcoords[PSF_zlower_idx]
-        PSF_zupper_idx = PSF_zlower_idx + 1
         PSF_zupper = PSF_zcoords[PSF_zupper_idx]
 
         C_zlower = δ_Δz(PSF_zlower - z)
