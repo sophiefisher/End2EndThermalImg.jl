@@ -149,7 +149,6 @@ function ImagingHyperParams(;
     )
 end
 
-# TODO: write descriptions
 struct GaussianObject{FloatType <: AbstractFloat} <: AbstractObjectType
     Tlb::FloatType # offset of the gaussian in temperature (in units of Kelvin)
     Tub::FloatType # peak of the gaussian in temperature (in units of Kelvin)
