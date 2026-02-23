@@ -350,14 +350,14 @@ function make_noisy_image_from_3D(
     return noisy_image
 end
 
-function reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, α, β, T_background, php, imghp)
+function reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, α, β, T_background, z_middle, php, imghp)
     object = unflatten_object(object_flat)
     τmap = object.Tmap
     ζmap = object.zmap
     image = make_image_from_3D(object, fftPSFs, weights, php, imghp)
     error_image = sum((image .- noisy_image).^2)
     regularization_τ = α * sum((τmap .- T_background).^2)
-    regularization_ζ = β * sum(ζmap.^2)
+    regularization_ζ = β * sum((ζmap .- z_middle).^2)
     error_image + regularization_τ + regularization_ζ
 end
 
@@ -366,7 +366,7 @@ end
 function reconstruct_Tmap_and_zmap(noisy_image, fftPSFs, weights, α, β, jhp::JobHyperParams; xtol_rel = 1e-8, maxeval = 5000, iteration_print = 50, verbose = false)
     verbose && @info "Starting object reconstruction"
     @unpack php, imghp, rechp = jhp
-    @unpack T_background = rechp
+    @unpack T_background, z_middle = rechp
     
     objective_history = Float64[]
     object_init = initialize_object(imghp, rechp)
@@ -375,7 +375,7 @@ function reconstruct_Tmap_and_zmap(noisy_image, fftPSFs, weights, α, β, jhp::J
     opt = Opt(:LD_LBFGS, 2 * imghp.objN^2) # TODO: check algorithm choice
     lower_bounds!(opt, [fill(eps(), imghp.objN^2); fill(imghp.PSF_zlb, imghp.objN^2)])
     upper_bounds!(opt, [fill(Inf, imghp.objN^2); fill(imghp.PSF_zub, imghp.objN^2)])
-    objective_lambda = object_flat -> reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, α, β, T_background, php, imghp)
+    objective_lambda = object_flat -> reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, α, β, T_background, z_middle, php, imghp)
     objective_wrapped_lambda = (x, grad) -> nlopt_wrap_objective_autodiff(x, grad, objective_lambda, objective_history; iteration_print = iteration_print, verbose = verbose)
     max_objective!(opt, objective_wrapped_lambda)
     xtol_rel!(opt, xtol_rel)
@@ -402,12 +402,12 @@ end
 # TODO: move to test.jl?
 function test_reconstruction_gradients(noisy_image, fftPSFs, weights, α, β, jhp; ε = 1e-6)
     @unpack php, imghp, rechp = jhp
-    @unpack T_background = rechp
+    @unpack T_background, z_middle = rechp
     
     object_init = initialize_object(imghp, rechp)
     object_init_flat = flatten_object(object_init)
 
-    objective_lambda = object_flat -> reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, α, β, T_background, php, imghp)
+    objective_lambda = object_flat -> reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, α, β, T_background, z_middle, php, imghp)
 
     grad_autodiff = Zygote.gradient(x -> objective_lambda(x), object_init_flat)[1]
     grad_fd = finite_difference_gradient_central(objective_lambda, object_init_flat; ε = ε)
