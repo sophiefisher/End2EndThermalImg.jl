@@ -348,6 +348,12 @@ function get_object(object_type::UniformlyRandomObject, imghp::ImagingHyperParam
     (; Tmap, zmap)
 end
 
+function get_object(object_type::UniformlyRandomTFixedDepthObject, imghp::ImagingHyperParams)
+    Tmap = rand(object_type.Tlb:eps():object_type.Tub, imghp.objN, imghp.objN)
+    zmap = fill(object_type.z, imghp.objN, imghp.objN)
+    (; Tmap, zmap)
+end
+
 function get_object(imghp::ImagingHyperParams)
     get_object(imghp.object_type, imghp)
 end
