@@ -1,17 +1,23 @@
 @memoize function make_plan(size::Tuple)
+    # TODO: do i want to thread the ffts?
     plan_fft(zeros(ComplexF64, size), flags=FFTW.MEASURE)
 end
 
 @memoize function make_plan!(size::Tuple)
+    # TODO: do i want to thread the ffts?
     plan_fft!(zeros(ComplexF64, size), flags=FFTW.MEASURE)
 end   
 
 function planned_fft(x)
+    # TODO: do i want to wrap this in ignore_derivatives?
+    # if i write a rule for this function, i probably don't need it
     plan = ChainRulesCore.ignore_derivatives( ()-> make_plan(size(x)) )
     plan * x
 end
 
 function planned_ifft(x)
+    # TODO: do i want to wrap this in ignore_derivatives?
+    # if i write a rule for this function, i probably don't need it
     plan = ChainRulesCore.ignore_derivatives( ()-> make_plan(size(x)) )
     plan \ x
 end
