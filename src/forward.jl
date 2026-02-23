@@ -173,6 +173,7 @@ function get_PSFs_threaded(freqs, incidents, surrogates, geoms, n2f_kernels,
 
     PSF_zlen = imghp.PSF_zlen
     nF = length(freqs)
+    # TODO add size of PSF below? 
     PSFs = Matrix{Matrix{Float64}}(undef, nF, PSF_zlen)
     inds = CartesianIndices((1:nF, 1:PSF_zlen))
 
