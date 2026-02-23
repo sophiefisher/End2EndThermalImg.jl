@@ -189,11 +189,11 @@ end
 
 # uniformly random Tmap and uniformly random depth map (within bounds)
 struct UniformlyRandomObject{FloatType <: AbstractFloat, IntType <: Integer} <: AbstractObjectType
-    Tlb::FloatType 
-    Tub::FloatType
-    zlb_μm::FloatType # lower bound z coordinate of the object (assumes the metasurface is at z = 0, so this should be negative)
-    zub_μm::FloatType # upper bound z coordinate of the object (assumes the metasurface is at z = 0, so this should be negative)
-    zlen::IntType # TODO: define zlen
+    Tlb::FloatType # lower bound of the temperature (in units of Kelvin)
+    Tub::FloatType # upper bound of the temperature (in units of Kelvin)
+    zlb_μm::FloatType # lower bound z coordinate of the object (assumes the metasurface is at z = 0, so this should be negative) (in units of μm)
+    zub_μm::FloatType # upper bound z coordinate of the object (assumes the metasurface is at z = 0, so this should be negative) (in units of μm)
+    zlen::IntType # discretization width of the z range (unlike for temperature, this is not eps() since the range is too large)
 
     # Computed parameters
     zlb::FloatType
