@@ -362,7 +362,6 @@ function reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, α
 end
 
 # TODO: might want to set xtol_rel, maxeval, as rechp parameters
-# TODO: change NLopt optimization to in-place
 function reconstruct_Tmap_and_zmap(noisy_image, fftPSFs, weights, α, β, jhp::JobHyperParams; xtol_rel = 1e-8, maxeval = 5000, iteration_print = 50, verbose = false)
     verbose && @info "Starting object reconstruction"
     @unpack php, imghp, rechp = jhp
