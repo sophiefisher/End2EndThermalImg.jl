@@ -399,6 +399,7 @@ function finite_difference_gradient_central(f, x; ε = 1e-6)
     return grad_fd
 end
 
+# TODO: move to test.jl?
 function test_reconstruction_gradients(noisy_image, fftPSFs, weights, α, β, jhp; ε = 1e-6)
     @unpack php, imghp, rechp = jhp
     @unpack T_background = rechp
