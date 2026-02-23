@@ -387,6 +387,46 @@ function reconstruct_Tmap_and_zmap(noisy_image, fftPSFs, weights, α, β, jhp::J
     (; objective_opt, object_opt, return_value, objective_history)
 end
 
+function Tmap_reconstruction_objective(Tmap_flat, noisy_image, fftPSFs, weights, α, T_background, php, imghp)
+    τmap = unflatten_square_matrix(Tmap_flat)
+    ζmap = fill(imghp.object_type.z, imghp.objN, imghp.objN)
+    object = (Tmap = τmap, zmap = ζmap)
+    image = make_image_from_3D(object, fftPSFs, weights, php, imghp)
+    error_image = sum((image .- noisy_image).^2)
+    regularization_τ = α * sum((τmap .- T_background).^2)
+    error_image + regularization_τ 
+end
+
+# sets β = 0
+# only works for objects with a fixed depth
+function reconstruct_Tmap_for_fixed_depth(noisy_image, fftPSFs, weights, α, jhp::JobHyperParams; xtol_rel = 1e-8, maxeval = 5000, iteration_print = 50, verbose = false)
+    verbose && @info "Starting object reconstruction"
+    @unpack php, imghp, rechp = jhp
+    @unpack T_background = rechp
+    
+    objective_history = Float64[]
+    object_init = initialize_object(imghp, rechp)
+    Tmap_init_flat = object_init.Tmap[:]
+    opt = Opt(:LD_LBFGS, imghp.objN^2) # TODO: check algorithm choice
+    lower_bounds!(opt, fill(eps(), imghp.objN^2))
+    upper_bounds!(opt, fill(Inf, imghp.objN^2))
+    objective_lambda = Tmap_flat -> Tmap_reconstruction_objective(Tmap_flat, noisy_image, fftPSFs, weights, α, T_background, php, imghp)
+    objective_wrapped_lambda = (x, grad) -> nlopt_wrap_objective_autodiff(x, grad, objective_lambda, objective_history; iteration_print = iteration_print, verbose = verbose)
+    min_objective!(opt, objective_wrapped_lambda)
+    xtol_rel!(opt, xtol_rel)
+    maxeval!(opt, maxeval)
+
+    (objective_opt, Tmap_opt_flat, return_value) = NLopt.optimize!(opt, Tmap_init_flat)
+    verbose && @info "Done Tmap reconstruction"
+    verbose && @info "Optimization results" objective_opt return_value
+    Tmap_opt = unflatten_square_matrix(Tmap_opt_flat)
+    zmap = fill(imghp.object_type.z, imghp.objN, imghp.objN)
+    object_opt = (Tmap = Tmap_opt, zmap = zmap)
+
+    (; objective_opt, object_opt, return_value, objective_history)
+end
+
+# TODO: move to test.jl?
 function finite_difference_gradient_central(f, x; ε = 1e-6)
     n = length(x)
     grad_fd = similar(x)
