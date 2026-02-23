@@ -57,7 +57,7 @@ end
 unitless_z_to_meters(z, php) = z * php.wavcen / 10^6
 
 # TODO: convert z coordinates to meters (?) actually: think i'm going to leave unitless
-function plot_PSFs_at_z(PSFs_at_z, zcoord, freqs; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y, fontsize = DEFAULT_FONTSIZE, cmap = "viridis", savefile = "", vmin = nothing, vmax = nothing, extra_title = "")
+function plot_PSFs_at_z(PSFs_at_z, zcoord, freqs; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y, fontsize = DEFAULT_FONTSIZE, cmap = "viridis", savefile = "", vmin = nothing, vmax = nothing, extra_title = "", log_scale = true)
     matplotlib.rcParams["font.size"] = fontsize
     num_PSFs = length(PSFs_at_z)
     numy, numx = compute_PSF_grid_dimensions(num_PSFs)
@@ -79,7 +79,8 @@ function plot_PSFs_at_z(PSFs_at_z, zcoord, freqs; figsize_x = DEFAULT_FIGSIZE_X,
             col = (i-1) % numx
             ax = axes[row, col]
         end
-        im = ax.imshow(PSF, norm=matplotlib.colors.LogNorm(vmin=vmin, vmax=vmax), cmap=cmap)
+        norm = log_scale ? matplotlib.colors.LogNorm(vmin=vmin, vmax=vmax) : nothing
+        im = ax.imshow(PSF, norm=norm, cmap=cmap)
         ax.axis("off")
         ax.set_title(L"\nu = %$(round(freqs[i],digits=2))", fontsize = fontsize)
     end

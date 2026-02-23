@@ -69,7 +69,7 @@ function design_monochromatic_lens(php, imghp; geoms_init_type = "uniform", xtol
             else
                 extra_title = "[index: $(z_idx)/$(length(PSF_zcoords))]"
             end
-            plot_PSFs_at_z(PSFs[:, z_idx], zcoord, freqs; savefile = "$(run_folder)/PSFs_z_$(zcoord).png", vmin = vmin, vmax = vmax, extra_title = extra_title)
+            plot_PSFs_at_z(PSFs[:, z_idx], zcoord, freqs; savefile = "$(run_folder)/PSFs_z_$(zcoord).png", vmin = vmin, vmax = vmax, extra_title = extra_title, log_scale = log_scale)
         end
     end
 
