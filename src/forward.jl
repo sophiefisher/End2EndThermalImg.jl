@@ -158,7 +158,7 @@ function get_PSFs_at_z(freqs, incidents_at_z, surrogates, geoms, n2f_kernels, ph
     [get_PSF_at_freq_and_z(freqs[iF], incidents_at_z[iF], surrogates[iF], geoms, n2f_kernels[iF], php, imghp) for iF in eachindex(freqs)]
 end
 
-function get_PSFs(freqs, incidents, surrogates, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+function get_PSFs_distributed(freqs, incidents, surrogates, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
     PSF_zlen = imghp.PSF_zlen
     #[get_PSF(freqs[iF], incidents[iF, iZ], surrogates[iF], geoms, n2f_kernels[iF], php, imghp) for iF in eachindex(freqs), iZ in 1:PSF_zlen]
     pmap(CartesianIndices((eachindex(freqs),1:PSF_zlen))) do i 
@@ -166,6 +166,31 @@ function get_PSFs(freqs, incidents, surrogates, geoms, n2f_kernels, php::Physics
         iZ = i[2]
         get_PSF_at_freq_and_z(freqs[iF], incidents[iF, iZ], surrogates[iF], geoms, n2f_kernels[iF], php, imghp)
     end
+end
+
+function get_PSFs_threaded(freqs, incidents, surrogates, geoms, n2f_kernels,
+                           php::PhysicsHyperParams, imghp::ImagingHyperParams)
+
+    PSF_zlen = imghp.PSF_zlen
+    nF = length(freqs)
+    PSFs = Matrix{Matrix{Float64}}(undef, nF, PSF_zlen)
+    inds = CartesianIndices((1:nF, 1:PSF_zlen))
+
+    Threads.@threads for idx in eachindex(inds)
+        I = inds[idx]
+        iF, iZ = I[1], I[2]
+
+        PSFs[iF, iZ] = get_PSF_at_freq_and_z(
+            freqs[iF],
+            incidents[iF, iZ],
+            surrogates[iF],
+            geoms,
+            n2f_kernels[iF],
+            php,
+            imghp
+        )
+    end
+    return PSFs
 end
 
 get_fftPSF(PSF) = planned_fft(complex.(PSF))
