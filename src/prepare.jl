@@ -384,3 +384,17 @@ end
 prepare_noise_buf(imghp) = Array{Float64}(undef, imghp.imgN, imghp.imgN)
 
 prepare_image_buf(imghp) = Array{Float64}(undef, imghp.imgN, imghp.imgN)
+
+# TODO: add object pixel sizes for different depths
+function compute_system_parameters(php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    @info "Computing system parameters"
+
+    image_pixel_size = imghp.binN * php.unit_cell_length_μm
+    @info "Image pixel size = $(round(image_pixel_size,digits=4)) μm"
+
+    metasurface_size = php.unit_cell_length_μm * php.num_unit_cells
+    @info "Metasurface size = $(round(metasurface_size,digits=4)) μm [$( round(metasurface_size / 1e4,digits=4)) cm]"
+
+    NA = sin(atan( php.unit_cell_length_μm * php.num_unit_cells / (2 * php.focal_length_μm) ))
+    @info "NA: $( round(NA,digits=4 ))"
+end
