@@ -135,8 +135,8 @@ function plot_reconstruction_results(object, object_opt;
 
     im00 = ax[0,0].imshow(object.Tmap, cmap = "magma", vmin = Tmin, vmax = Tmax)
     ax[0,0].set_title(L"$T(x,y)$ [ground truth]")
-    fig.colorbar(im00, ax=ax[0,0])
-    ax[0,0].axis("off")
+    fig.colorbar(im00, ax=ax[0,0], label="T (Kelvin)")
+    image_axis!(ax[0,0])
 
     im10 = ax[1,0].imshow(object.zmap, cmap = ColorMap(colorschemes[:devon].colors), vmin = zmin, vmax = zmax)
     ax[1,0].set_title(L"$z(x,y)$ [ground truth]")
