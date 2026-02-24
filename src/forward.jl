@@ -147,15 +147,15 @@ function far_field_to_PSF(far_field, freq, php::PhysicsHyperParams, imghp::Imagi
     far_field_to_PSF(far_field, freq, php.unit_cell_length, imghp.binN, imghp.sampleN, imghp.PSF_scale)
 end
 
-function get_PSFs_distributed(freqs, incidents, surrogates, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
-    PSF_zlen = imghp.PSF_zlen
-    #[get_PSF(freqs[iF], incidents[iF, iZ], surrogates[iF], geoms, n2f_kernels[iF], php, imghp) for iF in eachindex(freqs), iZ in 1:PSF_zlen]
-    pmap(CartesianIndices((eachindex(freqs),1:PSF_zlen))) do i 
-        iF = i[1]
-        iZ = i[2]
-        get_PSF_at_freq_and_z(freqs[iF], incidents[iF, iZ], surrogates[iF], geoms, n2f_kernels[iF], php, imghp)
-    end
-end
+# function get_PSFs_distributed(freqs, incidents, surrogates, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+#     PSF_zlen = imghp.PSF_zlen
+#     #[get_PSF(freqs[iF], incidents[iF, iZ], surrogates[iF], geoms, n2f_kernels[iF], php, imghp) for iF in eachindex(freqs), iZ in 1:PSF_zlen]
+#     pmap(CartesianIndices((eachindex(freqs),1:PSF_zlen))) do i 
+#         iF = i[1]
+#         iZ = i[2]
+#         get_PSF_at_freq_and_z(freqs[iF], incidents[iF, iZ], surrogates[iF], geoms, n2f_kernels[iF], php, imghp)
+#     end
+# end
 
 function get_PSFs_threaded(freqs, incidents, surrogates, geoms, n2f_kernels,
                            php::PhysicsHyperParams, imghp::ImagingHyperParams)
