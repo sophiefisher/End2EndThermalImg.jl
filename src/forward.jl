@@ -312,6 +312,9 @@ end
 #     return image_buf
 # end
 
+function get_C_interp_3D(zmap, PSF_zcoords, δ_Δz, imghp::ImagingHyperParams)
+    return [let
+        z = zmap[Tmap_idx1, Tmap_idx2]
         if z == PSF_zcoords[end]
             PSF_zlower_idx = imghp.PSF_zlen - 1
             PSF_zupper_idx = imghp.PSF_zlen
@@ -327,6 +330,14 @@ end
         C_zupper = δ_Δz(PSF_zupper - z)
         i == PSF_zlower_idx ? C_zlower : i == PSF_zupper_idx ? C_zupper : 0.0
     end for  Tmap_idx1 in 1:imghp.objN, Tmap_idx2 in 1:imghp.objN, i in 1:imghp.PSF_zlen]
+end
+
+# TODO: pass the variables wrapped in ignore_derivatives to the function directly
+function make_image_from_3D(object, fftPSFs, weights, plan_PSF, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    δ_Δz = ignore_derivatives( ()-> get_discretized_δ_function(imghp.smoothness_order, imghp.PSF_Δz))
+    PSF_zcoords = ignore_derivatives( ()-> get_PSF_zcoords(imghp))
+
+    C_interp_3D = get_C_interp_3D(object.zmap, PSF_zcoords, δ_Δz, imghp)
     B = get_black_body_spectrum(object.Tmap, php)
 
     image = sum(
