@@ -48,13 +48,15 @@ end
 
 # Convolves an inpL x inpL array with the FFT of a centered kernel 
 # of size kerL x kerL to produce an output of size (kerL - inpL) x (kerL - inpL).
+function convolve(inp, kernel, plan)
     # inpL < kerL
     inpL = size(inp, 1)
     kerL = size(kernel, 1)
     outL = kerL - inpL
 
     arr_pad = [inp zeros(inpL, outL); zeros(outL, inpL) zeros(outL, outL)]
-    out_pad = planned_ifft(planned_fft(arr_pad) .* kernel)
+    out_pad = plan \ ((plan * arr_pad) .* kernel)
+
     out = out_pad[inpL+1:kerL, inpL+1:kerL]
     out
 end
@@ -103,12 +105,12 @@ function efield_n2f_greens(x, y, z, k, ϵ, μ)
     z * (-1 + k * r * im) * ℯ ^ (k * r * im) / (4 * π * r^3) * (-μ / ϵ)
 end
 
-function n2f_kernel(freq, z, ϵ, μ, n2f_size, unit_cell_length, sampleN)
+function n2f_kernel(freq, z, ϵ, μ, n2f_size, unit_cell_length, sampleN, plan_n2f)
     ω = 2 * π * freq
     n = √(ϵ*μ)
     k = n * ω
     gridout = range(-(n2f_size ÷ 2), (n2f_size ÷ 2) - 1, length = n2f_size  ) .* (unit_cell_length / sampleN)
-    n2f_kernel = planned_fft!([efield_n2f_greens(x, y, z, k, ϵ, μ) for x in gridout, y in gridout])
+    n2f_kernel = plan_n2f * [efield_n2f_greens(x, y, z, k, ϵ, μ) for x in gridout, y in gridout]
     n2f_kernel
 end
 
@@ -120,21 +122,21 @@ function get_n2f_size(php::PhysicsHyperParams, imghp::ImagingHyperParams)
     n2f_size
 end
 
-function get_n2f_kernel(freq, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+function get_n2f_kernel(freq, plan_n2f, php::PhysicsHyperParams, imghp::ImagingHyperParams)
     @unpack focal_length, unit_cell_length = php
     @unpack sampleN = imghp
     n2f_size = get_n2f_size(php, imghp)
-    out = n2f_kernel(freq, focal_length, 1.0, 1.0, n2f_size, unit_cell_length, sampleN)
+    out = n2f_kernel(freq, focal_length, 1.0, 1.0, n2f_size, unit_cell_length, sampleN, plan_n2f)
     out
 end
 
-function get_n2f_kernels(freqs, php::PhysicsHyperParams, imghp::ImagingHyperParams)
-    n2f_kernels = [get_n2f_kernel(freq, php, imghp) for freq in freqs]
+function get_n2f_kernels(freqs, plan_n2f, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    n2f_kernels = [get_n2f_kernel(freq, plan_n2f, php, imghp) for freq in freqs]
     n2f_kernels
 end
 
-function near_to_far_field(near_field, n2f_kernel)
-    far = convolve(near_field, n2f_kernel)
+function near_to_far_field(near_field, n2f_kernel, plan_n2f)
+    far = convolve(near_field, n2f_kernel, plan_n2f)
     far
 end
 
@@ -172,7 +174,7 @@ end
 #     end
 # end
 
-function get_PSFs_threaded(freqs, incidents, surrogates, geoms, n2f_kernels,
+function get_PSFs(freqs, incidents, surrogates, geoms, n2f_kernels, plans_n2f,
                            php::PhysicsHyperParams, imghp::ImagingHyperParams)
 
     PSF_zlen = imghp.PSF_zlen
@@ -191,6 +193,7 @@ function get_PSFs_threaded(freqs, incidents, surrogates, geoms, n2f_kernels,
             surrogates[iF],
             geoms,
             n2f_kernels[iF],
+            plans_n2f[tid],
             php,
             imghp
         )
@@ -198,16 +201,9 @@ function get_PSFs_threaded(freqs, incidents, surrogates, geoms, n2f_kernels,
     return PSFs
 end
 
-get_fftPSF(PSF) = planned_fft(complex.(PSF))
+# TODO: make in-place?
+get_fftPSF(PSF, plan_PSF) = plan_PSF * complex.(PSF)
 
-function get_fftPSFs_distributed(freqs, incidents, surrogates, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
-    PSF_zlen = imghp.PSF_zlen
-    pmap(CartesianIndices((eachindex(freqs),1:PSF_zlen))) do i 
-        iF = i[1]
-        iZ = i[2]
-        get_fftPSF(get_PSF_at_freq_and_z(freqs[iF], incidents[iF, iZ], surrogates[iF], geoms, n2f_kernels[iF], php, imghp))
-    end
-end
 
 function get_fftPSFs_threaded(freqs, incidents, surrogates, geoms, n2f_kernels,
                            php::PhysicsHyperParams, imghp::ImagingHyperParams)
@@ -227,9 +223,10 @@ function get_fftPSFs_threaded(freqs, incidents, surrogates, geoms, n2f_kernels,
             surrogates[iF],
             geoms,
             n2f_kernels[iF],
+            plans_n2f[tid],
             php,
             imghp
-        ))
+        ), plans_PSF[tid])
     end
     return PSFs
 end
@@ -262,11 +259,15 @@ function get_black_body_spectrum(Tmap_zslice, php::PhysicsHyperParams)
     b
 end
 
-convolve_with_fftPSF_at_freq_and_z(fftPSF_at_freq_and_z, b_at_freq_and_z) = real.(convolve(b_at_freq_and_z, fftPSF_at_freq_and_z))
+convolve_with_fftPSF_at_freq_and_z(fftPSF_at_freq_and_z, b_at_freq_and_z, plan_PSF) = real.(convolve(b_at_freq_and_z, fftPSF_at_freq_and_z, plan_PSF))
 
-function make_image_at_z(spectrum_at_z, fftPSFs_at_z, weights)
-    image = sum(weights .* map(convolve_with_fftPSF_at_freq_and_z, fftPSFs_at_z, spectrum_at_z))
-    image
+function make_image_at_z(spectrum_at_z, fftPSFs_at_z, weights, plan_PSF)
+    image = sum(
+        weights .* convolve_with_fftPSF_at_freq_and_z.(fftPSFs_at_z,
+                                                       spectrum_at_z,
+                                                       Ref(plan_PSF))
+    )
+    return image
 end
 
 function make_image_from_3D!(image_buf, object, fftPSFs, weights, php::PhysicsHyperParams, imghp::ImagingHyperParams)
@@ -332,7 +333,7 @@ function make_image_from_3D(object, fftPSFs, weights, php::PhysicsHyperParams, i
     image = sum(
         iZ -> begin
             spectrum = [b .* C_interp_3D[:, :, iZ] for b in B]
-            image_at_z = make_image_at_z(spectrum, fftPSFs[:, iZ], weights)
+            image_at_z = make_image_at_z(spectrum, fftPSFs[:, iZ], weights, plan_PSF)
         end,
     eachindex(PSF_zcoords))
     image
@@ -359,17 +360,17 @@ function make_noisy_image_from_3D(
     object, fftPSFs, weights, noise,
     php::PhysicsHyperParams, imghp::ImagingHyperParams)
 
-    image = make_image_from_3D(object, fftPSFs, weights, php, imghp)
+    image = make_image_from_3D(object, fftPSFs, weights, plan_PSF, php, imghp)
     noise_scale = mean(image) * imghp.noise_level
     noisy_image = image .+ noise_scale .* noise
     return noisy_image
 end
 
-function reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, α, β, T_background, z_middle, php, imghp)
+function reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, plan_PSF, α, β, T_background, z_middle, php, imghp)
     object = unflatten_object(object_flat)
     τmap = object.Tmap
     ζmap = object.zmap
-    image = make_image_from_3D(object, fftPSFs, weights, php, imghp)
+    image = make_image_from_3D(object, fftPSFs, weights, plan_PSF, php, imghp)
     error_image = sum((image .- noisy_image).^2)
     regularization_τ = α * sum((τmap .- T_background).^2)
     regularization_ζ = β * sum((ζmap .- z_middle).^2)
@@ -377,7 +378,7 @@ function reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, α
 end
 
 # TODO: might want to set xtol_rel, maxeval, as rechp parameters
-function reconstruct_Tmap_and_zmap(noisy_image, fftPSFs, weights, α, β, jhp::JobHyperParams; xtol_rel = 1e-8, maxeval = 5000, iteration_print = 50, verbose = false)
+function reconstruct_Tmap_and_zmap(noisy_image, fftPSFs, weights, plan_PSF, α, β, jhp::JobHyperParams; xtol_rel = 1e-8, maxeval = 5000, iteration_print = 50, verbose = false)
     verbose && @info "Starting object reconstruction"
     @unpack php, imghp, rechp = jhp
     @unpack T_background, z_middle = rechp
@@ -389,7 +390,7 @@ function reconstruct_Tmap_and_zmap(noisy_image, fftPSFs, weights, α, β, jhp::J
     opt = Opt(:LD_LBFGS, 2 * imghp.objN^2) # TODO: check algorithm choice
     lower_bounds!(opt, [fill(eps(), imghp.objN^2); fill(imghp.PSF_zlb, imghp.objN^2)])
     upper_bounds!(opt, [fill(Inf, imghp.objN^2); fill(imghp.PSF_zub, imghp.objN^2)])
-    objective_lambda = object_flat -> reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, α, β, T_background, z_middle, php, imghp)
+    objective_lambda = object_flat -> reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, plan_PSF, α, β, T_background, z_middle, php, imghp)
     objective_wrapped_lambda = (x, grad) -> nlopt_wrap_objective_autodiff(x, grad, objective_lambda, objective_history; iteration_print = iteration_print, verbose = verbose)
     min_objective!(opt, objective_wrapped_lambda)
     xtol_rel!(opt, xtol_rel)
@@ -454,14 +455,11 @@ function finite_difference_gradient_central(f, x; ε = 1e-6)
 end
 
 # TODO: move to test.jl?
-function test_reconstruction_gradients(noisy_image, fftPSFs, weights, α, β, jhp; ε = 1e-6)
+function test_reconstruction_gradients(noisy_image, fftPSFs, weights, plan_PSF, α, β, jhp; ε = 1e-6)
     @unpack php, imghp, rechp = jhp
     @unpack T_background, z_middle = rechp
     
-    object_init = initialize_object(imghp, rechp)
-    object_init_flat = flatten_object(object_init)
-
-    objective_lambda = object_flat -> reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, α, β, T_background, z_middle, php, imghp)
+    objective_lambda = object_flat -> reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, plan_PSF, α, β, T_background, z_middle, php, imghp)
 
     grad_autodiff = Zygote.gradient(x -> objective_lambda(x), object_init_flat)[1]
     grad_fd = finite_difference_gradient_central(objective_lambda, object_init_flat; ε = ε)
