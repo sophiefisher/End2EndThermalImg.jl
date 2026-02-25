@@ -30,16 +30,22 @@ end
 function planned_ifft!(x)
     plan = make_plan!(size(x))
     plan \ x
+# TODO: think about whether these should be in-place
+# TODO: might only need one plan_PSF
+function get_fft_plans(php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    n2f_size = get_n2f_size(php, imghp)
+    PSF_size = imghp.objN + imghp.imgN
+    plans_n2f = Vector{FFTW.cFFTWPlan}(undef, nthreads())
+    plans_PSF = Vector{FFTW.cFFTWPlan}(undef, nthreads())
+    for t in 1:nthreads()
+        plans_n2f[t] = plan_fft(zeros(ComplexF64, (n2f_size, n2f_size)), flags=FFTW.MEASURE)
+        plans_PSF[t] = plan_fft(zeros(ComplexF64, (PSF_size, PSF_size)), flags=FFTW.MEASURE)
+    end
+    plans_n2f, plans_PSF
 end
 
-"""
-    convolve(inp, kernel)
-
-Convolves an inpL x inpL array with the FFT of a centered kernel 
-of size kerL x kerL to produce an output of size (kerL - inpL) x (kerL - inpL).
-
-"""
-function convolve(inp, kernel)
+# Convolves an inpL x inpL array with the FFT of a centered kernel 
+# of size kerL x kerL to produce an output of size (kerL - inpL) x (kerL - inpL).
     # inpL < kerL
     inpL = size(inp, 1)
     kerL = size(kernel, 1)
