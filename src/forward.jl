@@ -366,20 +366,6 @@ end
 # end
 
 generate_noise(imghp) = randn((imghp.imgN, imghp.imgN))
-
-# generates noise inside function
-function make_noisy_image_from_3D!(
-    image_buf, noise_buf,
-    object, fftPSFs, weights,
-    php::PhysicsHyperParams, imghp::ImagingHyperParams)
-
-    make_image_from_3D!(image_buf, object, fftPSFs, weights, php, imghp)
-    noise_scale = mean(image_buf) * imghp.noise_level
-    generate_noise!(noise_buf)
-    @. image_buf += noise_scale * noise_buf
-    return image_buf
-end
-
 # pass noise to function
 function make_noisy_image_from_3D(
     object, fftPSFs, weights, noise, plan_PSF,
