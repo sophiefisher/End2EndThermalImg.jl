@@ -33,7 +33,6 @@ function planned_ifft!(x)
 end =#
 
 # TODO: think about whether these should be in-place
-# TODO: might only need one plan_PSF
 function get_fft_plans(php::PhysicsHyperParams, imghp::ImagingHyperParams)
     n2f_size = get_n2f_size(php, imghp)
     PSF_size = imghp.objN + imghp.imgN
