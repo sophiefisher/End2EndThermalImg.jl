@@ -382,7 +382,7 @@ end
 
 # pass noise to function
 function make_noisy_image_from_3D(
-    object, fftPSFs, weights, noise,
+    object, fftPSFs, weights, noise, plan_PSF,
     php::PhysicsHyperParams, imghp::ImagingHyperParams)
 
     image = make_image_from_3D(object, fftPSFs, weights, plan_PSF, php, imghp)
