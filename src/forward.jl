@@ -277,49 +277,41 @@ function make_image_at_z(spectrum_at_z, fftPSFs_at_z, weights, plan_PSF)
     return image
 end
 
-function make_image_from_3D!(image_buf, object, fftPSFs, weights, php::PhysicsHyperParams, imghp::ImagingHyperParams)
-    δ_Δz = get_discretized_δ_function(imghp)
-    PSF_zcoords = get_PSF_zcoords(imghp)
+# function make_image_from_3D!(image_buf, object, fftPSFs, weights, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+#     δ_Δz = get_discretized_δ_function(imghp)
+#     PSF_zcoords = get_PSF_zcoords(imghp)
 
-    # TODO: turn repeated code into function (see make_image_from_3D)
-    C_interp_3D = zeros(imghp.objN, imghp.objN, imghp.PSF_zlen) # TODO: allocations
-    Tmap_indices = CartesianIndices((1:imghp.objN, 1:imghp.objN))
-    for Tmap_idx in Tmap_indices
-        z = object.zmap[Tmap_idx]
-        if z == PSF_zcoords[end]
-            PSF_zlower_idx = imghp.PSF_zlen - 1
-            PSF_zupper_idx = imghp.PSF_zlen
-        else
-            PSF_zlower_idx = searchsortedlast(PSF_zcoords, z)
-            PSF_zupper_idx = PSF_zlower_idx + 1
-        end
-        PSF_zlower = PSF_zcoords[PSF_zlower_idx]
-        PSF_zupper = PSF_zcoords[PSF_zupper_idx]
+#     # TODO: turn repeated code into function (see make_image_from_3D)
+#     C_interp_3D = zeros(imghp.objN, imghp.objN, imghp.PSF_zlen) # TODO: allocations
+#     Tmap_indices = CartesianIndices((1:imghp.objN, 1:imghp.objN))
+#     for Tmap_idx in Tmap_indices
+#         z = object.zmap[Tmap_idx]
+#         if z == PSF_zcoords[end]
+#             PSF_zlower_idx = imghp.PSF_zlen - 1
+#             PSF_zupper_idx = imghp.PSF_zlen
+#         else
+#             PSF_zlower_idx = searchsortedlast(PSF_zcoords, z)
+#             PSF_zupper_idx = PSF_zlower_idx + 1
+#         end
+#         PSF_zlower = PSF_zcoords[PSF_zlower_idx]
+#         PSF_zupper = PSF_zcoords[PSF_zupper_idx]
 
-        C_zlower = δ_Δz(PSF_zlower - z)
-        C_zupper = δ_Δz(PSF_zupper - z)
-        C_interp_3D[Tmap_idx, PSF_zlower_idx] = C_zlower
-        C_interp_3D[Tmap_idx, PSF_zupper_idx] = C_zupper
-    end
-    B = get_black_body_spectrum(object.Tmap, php)
+#         C_zlower = δ_Δz(PSF_zlower - z)
+#         C_zupper = δ_Δz(PSF_zupper - z)
+#         C_interp_3D[Tmap_idx, PSF_zlower_idx] = C_zlower
+#         C_interp_3D[Tmap_idx, PSF_zupper_idx] = C_zupper
+#     end
+#     B = get_black_body_spectrum(object.Tmap, php)
 
-    fill!(image_buf, 0.0)
-    @views for iZ in eachindex(PSF_zcoords)
-        spectrum = [b .* C_interp_3D[:, :, iZ] for b in B]  # TODO: allocations
-        image_at_z = make_image_at_z(spectrum, fftPSFs[:, iZ], weights) # TODO: allocations
-        @. image_buf += image_at_z
-    end
-    return image_buf
-end
+#     fill!(image_buf, 0.0)
+#     @views for iZ in eachindex(PSF_zcoords)
+#         spectrum = [b .* C_interp_3D[:, :, iZ] for b in B]  # TODO: allocations
+#         image_at_z = make_image_at_z(spectrum, fftPSFs[:, iZ], weights) # TODO: allocations
+#         @. image_buf += image_at_z
+#     end
+#     return image_buf
+# end
 
-# TODO: pass the variables wrapped in ignore_derivatives to the function directly
-function make_image_from_3D(object, fftPSFs, weights, php::PhysicsHyperParams, imghp::ImagingHyperParams)
-    δ_Δz = ChainRulesCore.ignore_derivatives( ()-> get_discretized_δ_function(imghp.smoothness_order, imghp.PSF_Δz))
-    PSF_zcoords = ChainRulesCore.ignore_derivatives( ()-> get_PSF_zcoords(imghp))
-
-    # TODO: turn repeated code into function (see make_image_from_3D!)
-    C_interp_3D = [let
-        z = object.zmap[Tmap_idx1, Tmap_idx2]
         if z == PSF_zcoords[end]
             PSF_zlower_idx = imghp.PSF_zlen - 1
             PSF_zupper_idx = imghp.PSF_zlen
@@ -346,7 +338,21 @@ function make_image_from_3D(object, fftPSFs, weights, php::PhysicsHyperParams, i
     image
 end
 
-generate_noise!(noise_buf) = randn!(noise_buf)
+# generate_noise!(noise_buf) = randn!(noise_buf)
+
+# # generates noise inside function
+# function make_noisy_image_from_3D!(
+#     image_buf, noise_buf,
+#     object, fftPSFs, weights,
+#     php::PhysicsHyperParams, imghp::ImagingHyperParams)
+
+#     make_image_from_3D!(image_buf, object, fftPSFs, weights, php, imghp)
+#     noise_scale = mean(image_buf) * imghp.noise_level
+#     generate_noise!(noise_buf)
+#     @. image_buf += noise_scale * noise_buf
+#     return image_buf
+# end
+
 generate_noise(imghp) = randn((imghp.imgN, imghp.imgN))
 
 # generates noise inside function
@@ -410,44 +416,44 @@ function reconstruct_Tmap_and_zmap(noisy_image, fftPSFs, weights, plan_PSF, α, 
     (; objective_opt, object_opt, return_value, objective_history)
 end
 
-function Tmap_reconstruction_objective(Tmap_flat, noisy_image, fftPSFs, weights, α, T_background, php, imghp)
-    τmap = unflatten_square_matrix(Tmap_flat)
-    ζmap = fill(imghp.object_type.z, imghp.objN, imghp.objN)
-    object = (Tmap = τmap, zmap = ζmap)
-    image = make_image_from_3D(object, fftPSFs, weights, php, imghp)
-    error_image = sum((image .- noisy_image).^2)
-    regularization_τ = α * sum((τmap .- T_background).^2)
-    error_image + regularization_τ 
-end
+# function Tmap_reconstruction_objective(Tmap_flat, noisy_image, fftPSFs, weights, α, T_background, php, imghp)
+#     τmap = unflatten_square_matrix(Tmap_flat)
+#     ζmap = fill(imghp.object_type.z, imghp.objN, imghp.objN)
+#     object = (Tmap = τmap, zmap = ζmap)
+#     image = make_image_from_3D(object, fftPSFs, weights, php, imghp)
+#     error_image = sum((image .- noisy_image).^2)
+#     regularization_τ = α * sum((τmap .- T_background).^2)
+#     error_image + regularization_τ 
+# end
 
-# sets β = 0
-# only works for objects with a fixed depth
-function reconstruct_Tmap_for_fixed_depth(noisy_image, fftPSFs, weights, α, jhp::JobHyperParams; xtol_rel = 1e-8, maxeval = 5000, iteration_print = 50, verbose = false)
-    verbose && @info "Starting object reconstruction"
-    @unpack php, imghp, rechp = jhp
-    @unpack T_background = rechp
+# # sets β = 0
+# # only works for objects with a fixed depth
+# function reconstruct_Tmap_for_fixed_depth(noisy_image, fftPSFs, weights, α, jhp::JobHyperParams; xtol_rel = 1e-8, maxeval = 5000, iteration_print = 50, verbose = false)
+#     verbose && @info "Starting object reconstruction"
+#     @unpack php, imghp, rechp = jhp
+#     @unpack T_background = rechp
     
-    objective_history = Float64[]
-    object_init = initialize_object(imghp, rechp)
-    Tmap_init_flat = object_init.Tmap[:]
-    opt = Opt(:LD_LBFGS, imghp.objN^2) # TODO: check algorithm choice
-    lower_bounds!(opt, fill(eps(), imghp.objN^2))
-    upper_bounds!(opt, fill(Inf, imghp.objN^2))
-    objective_lambda = Tmap_flat -> Tmap_reconstruction_objective(Tmap_flat, noisy_image, fftPSFs, weights, α, T_background, php, imghp)
-    objective_wrapped_lambda = (x, grad) -> nlopt_wrap_objective_autodiff(x, grad, objective_lambda, objective_history; iteration_print = iteration_print, verbose = verbose)
-    min_objective!(opt, objective_wrapped_lambda)
-    xtol_rel!(opt, xtol_rel)
-    maxeval!(opt, maxeval)
+#     objective_history = Float64[]
+#     object_init = initialize_object(imghp, rechp)
+#     Tmap_init_flat = object_init.Tmap[:]
+#     opt = Opt(:LD_LBFGS, imghp.objN^2) # TODO: check algorithm choice
+#     lower_bounds!(opt, fill(eps(), imghp.objN^2))
+#     upper_bounds!(opt, fill(Inf, imghp.objN^2))
+#     objective_lambda = Tmap_flat -> Tmap_reconstruction_objective(Tmap_flat, noisy_image, fftPSFs, weights, α, T_background, php, imghp)
+#     objective_wrapped_lambda = (x, grad) -> nlopt_wrap_objective_autodiff(x, grad, objective_lambda, objective_history; iteration_print = iteration_print, verbose = verbose)
+#     min_objective!(opt, objective_wrapped_lambda)
+#     xtol_rel!(opt, xtol_rel)
+#     maxeval!(opt, maxeval)
 
-    (objective_opt, Tmap_opt_flat, return_value) = NLopt.optimize!(opt, Tmap_init_flat)
-    verbose && @info "Done Tmap reconstruction"
-    verbose && @info "Optimization results" objective_opt return_value
-    Tmap_opt = unflatten_square_matrix(Tmap_opt_flat)
-    zmap = fill(imghp.object_type.z, imghp.objN, imghp.objN)
-    object_opt = (Tmap = Tmap_opt, zmap = zmap)
+#     (objective_opt, Tmap_opt_flat, return_value) = NLopt.optimize!(opt, Tmap_init_flat)
+#     verbose && @info "Done Tmap reconstruction"
+#     verbose && @info "Optimization results" objective_opt return_value
+#     Tmap_opt = unflatten_square_matrix(Tmap_opt_flat)
+#     zmap = fill(imghp.object_type.z, imghp.objN, imghp.objN)
+#     object_opt = (Tmap = Tmap_opt, zmap = zmap)
 
-    (; objective_opt, object_opt, return_value, objective_history)
-end
+#     (; objective_opt, object_opt, return_value, objective_history)
+# end
 
 # TODO: move to test.jl?
 function finite_difference_gradient_central(f, x; ε = 1e-6)
