@@ -1,4 +1,4 @@
-@memoize function make_plan(size::Tuple)
+#= @memoize function make_plan(size::Tuple)
     # TODO: do i want to thread the ffts?
     plan_fft(zeros(ComplexF64, size), flags=FFTW.MEASURE)
 end
@@ -30,6 +30,8 @@ end
 function planned_ifft!(x)
     plan = make_plan!(size(x))
     plan \ x
+end =#
+
 # TODO: think about whether these should be in-place
 # TODO: might only need one plan_PSF
 function get_fft_plans(php::PhysicsHyperParams, imghp::ImagingHyperParams)
