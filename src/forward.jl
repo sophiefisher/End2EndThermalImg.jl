@@ -489,5 +489,4 @@ function test_reconstruction_gradients(noisy_image, fftPSFs, weights, plan_PSF, 
     ax.legend()
 
     return diff_norm, fig
-
 end
