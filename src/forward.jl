@@ -182,7 +182,8 @@ function get_PSFs(freqs, incidents, surrogates, geoms, n2f_kernels, plans_n2f,
     PSFs = Matrix{Matrix{Float64}}(undef, nF, PSF_zlen)
     inds = CartesianIndices((1:nF, 1:PSF_zlen))
 
-    Threads.@threads for idx in eachindex(inds)
+    @threads for idx in eachindex(inds)
+        tid = threadid()
         I = inds[idx]
         iF, iZ = I[1], I[2]
 
