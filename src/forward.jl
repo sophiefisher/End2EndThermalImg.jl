@@ -465,7 +465,8 @@ function finite_difference_gradient_central(f, x; ε = 1e-6)
 end
 
 # TODO: move to test.jl?
-function test_reconstruction_gradients(noisy_image, fftPSFs, weights, plan_PSF, α, β, jhp; ε = 1e-6)
+function test_reconstruction_gradients(noisy_image, fftPSFs, weights, plan_PSF, α, β, jhp;
+    ε = 1e-6, figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y)
     @unpack php, imghp, rechp = jhp
     @unpack T_background, z_middle = rechp
     
@@ -475,8 +476,18 @@ function test_reconstruction_gradients(noisy_image, fftPSFs, weights, plan_PSF, 
     grad_autodiff = Zygote.gradient(x -> objective_lambda(x), object_init_flat)[1]
     grad_fd = finite_difference_gradient_central(objective_lambda, object_init_flat; ε = ε)
 
-    # compare
-    diff_norm = norm(grad_autodiff - grad_fd) / (norm(grad_fd))
 
+    diff_norm = norm(grad_autodiff - grad_fd) / (norm(grad_fd))
     @info "Relative gradient error for ε=$(ε): $diff_norm"
+
+    fig, ax = subplots(figsize=(figsize_x, figsize_y))
+    ax.plot(grad_fd;       label = "Finite difference", linewidth = 1, alpha = 0.8)
+    ax.plot(grad_autodiff; label = "Autodiff",          linewidth = 1, alpha = 0.8)
+    ax.set_xlabel("Gradient component index")
+    ax.set_ylabel("Gradient value")
+    ax.set_title("Gradient comparison (rel. error = $(round(diff_norm, sigdigits=3)))")
+    ax.legend()
+
+    return diff_norm, fig
+
 end
