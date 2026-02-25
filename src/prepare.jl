@@ -318,6 +318,8 @@ function initialize_object(imghp::ImagingHyperParams, rechp::ReconstructionHyper
     @unpack object_init_type, T_background = rechp
     PSF_zcoords = get_PSF_zcoords(imghp)
 
+    # TODO: might want to base center_zcoord off of the object z limits instead of the PSF limits
+    # but then might have to modify code based on object_type
     if object_init_type == "uniform"
         Tmap = fill(T_background, objN, objN)
         center_zcoord_idx = cld(length(PSF_zcoords), 2)
