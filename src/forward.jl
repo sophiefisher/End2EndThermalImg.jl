@@ -466,6 +466,7 @@ function test_reconstruction_gradients(noisy_image, fftPSFs, weights, plan_PSF, 
     @unpack php, imghp, rechp = jhp
     @unpack T_background, z_middle = rechp
     
+    object_init_flat = flatten_object(initialize_object(imghp, rechp))
     objective_lambda = object_flat -> reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, plan_PSF, α, β, T_background, z_middle, php, imghp)
 
     grad_autodiff = Zygote.gradient(x -> objective_lambda(x), object_init_flat)[1]
