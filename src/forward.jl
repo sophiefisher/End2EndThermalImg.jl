@@ -476,7 +476,6 @@ function test_reconstruction_gradients(noisy_image, fftPSFs, weights, plan_PSF, 
     grad_autodiff = Zygote.gradient(x -> objective_lambda(x), object_init_flat)[1]
     grad_fd = finite_difference_gradient_central(objective_lambda, object_init_flat; ε = ε)
 
-
     diff_norm = norm(grad_autodiff - grad_fd) / (norm(grad_fd))
     @info "Relative gradient error for ε=$(ε): $diff_norm"
 
