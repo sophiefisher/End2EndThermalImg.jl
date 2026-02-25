@@ -38,6 +38,7 @@ module End2EndThermalImg
     using Statistics
     using Random
     using LinearAlgebra
+    using Base.Threads
 
     const c = 299792458
     const ħ = 6.62607015e-34
