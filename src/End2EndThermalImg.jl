@@ -58,5 +58,6 @@ module End2EndThermalImg
     include("process.jl")
     include("surrogate.jl")
     include("inversedesign.jl")
+    include("diagnostics.jl")
 
 end
