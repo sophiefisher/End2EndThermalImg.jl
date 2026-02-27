@@ -365,6 +365,7 @@ end
 # end
 
 generate_noise(imghp) = randn((imghp.imgN, imghp.imgN))
+
 # pass noise to function
 function make_noisy_image_from_3D(
     object, fftPSFs, weights, noise, plan_PSF,
