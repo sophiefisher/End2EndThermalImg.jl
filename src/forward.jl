@@ -60,6 +60,18 @@ function convolve(inp, kernel, plan)
     out
 end
 
+function convolveT(out, kernel, plan)
+    outL = size(out, 1)
+    kerL = size(kernel, 1)
+    inpL = kerL - outL
+
+    out_pad = [zeros(inpL, inpL) zeros(inpL, outL); zeros(outL, inpL) out]
+    arr_pad = plan * ((plan \ out_pad) .* kernel )
+
+    arr = arr_pad[1:inpL, 1:inpL]
+    arr
+end
+
 function efield_point_source(x, y, z, k)
     r = √(x^2 + y^2 + z^2) 
     ℯ ^ (k * r * im) / ( 4 * π * r)
