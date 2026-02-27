@@ -89,8 +89,11 @@ end
 
 function get_near_field(incident_field, surrogate, geoms, sampleN)
     near = incident_field .* surrogate.(geoms)
-    near = repeat(near, inner=(sampleN, sampleN))
-    near
+    if imghp.sampleN == 1
+        return near
+    else
+        return repeat(near, inner=(imghp.sampleN, imghp.sampleN))
+    end
 end
 
 function get_near_field(incident_field, surrogate, geoms, imghp::ImagingHyperParams)
