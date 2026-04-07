@@ -220,7 +220,7 @@ function get_fftPSFs(freqs, incidents, surrogates, geoms, n2f_kernels, plans_n2f
 
     PSF_zlen = imghp.PSF_zlen
     nF = length(freqs)
-    PSFs = Matrix{Matrix{ComplexF64}}(undef, nF, PSF_zlen)
+    fftPSFs = Matrix{Matrix{ComplexF64}}(undef, nF, PSF_zlen)
     inds = CartesianIndices((1:nF, 1:PSF_zlen))
 
     @threads for idx in eachindex(inds)
@@ -228,7 +228,7 @@ function get_fftPSFs(freqs, incidents, surrogates, geoms, n2f_kernels, plans_n2f
         I = inds[idx]
         iF, iZ = I[1], I[2]
 
-        PSFs[iF, iZ] = get_fftPSF(get_PSF_at_freq_and_z(
+        fftPSFs[iF, iZ] = get_fftPSF(get_PSF_at_freq_and_z(
             freqs[iF],
             incidents[iF, iZ],
             surrogates[iF],
@@ -239,7 +239,7 @@ function get_fftPSFs(freqs, incidents, surrogates, geoms, n2f_kernels, plans_n2f
             imghp
         ), plans_PSF[tid])
     end
-    return PSFs
+    return fftPSFs
 end
 
 function f_δ(smoothness_order, z)
