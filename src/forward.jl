@@ -162,7 +162,6 @@ function far_field_to_PSF(far_field, freq, unit_cell_length, binN, sampleN, PSF_
     far_field_abs_integrated = sum(far_field_abs_integrated, dims=(1, 3)) 
     # (unit_cell_length / sampleN) is the integration/sampling width for integrating over each subpixel
     # divide by freq to turn energy into photon count
-    # TODO: to normalize correctly, also need to divide by factor of hbar here
     PSF = dropdims(far_field_abs_integrated, dims=(1, 3)) .* (unit_cell_length / sampleN) .* PSF_scale ./ freq 
     PSF
 end
