@@ -242,7 +242,7 @@ function get_fftPSFs(freqs, incidents, surrogates, geoms, n2f_kernels, plans_n2f
     return fftPSFs
 end
 
-function f_δ(smoothness_order, z)
+function f_δ(z, smoothness_order)
     if smoothness_order == Inf
         return z > 0.0 ? exp(-1 / z) : 0.0
     else
