@@ -89,7 +89,7 @@ end
 
 function get_near_field(incident_field, surrogate, geoms, sampleN)
     near = incident_field .* surrogate.(geoms)
-    if imghp.sampleN == 1
+    if sampleN == 1
         return near
     else
         return repeat(near, inner=(imghp.sampleN, imghp.sampleN))
