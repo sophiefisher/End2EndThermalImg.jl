@@ -315,23 +315,17 @@ end
 # end
 
 function get_C_interp_3D(zmap, PSF_zcoords, δ_Δz, imghp::ImagingHyperParams)
-    return [let
-        z = zmap[Tmap_idx1, Tmap_idx2]
-        if z == PSF_zcoords[end]
-            PSF_zlower_idx = imghp.PSF_zlen - 1
-            PSF_zupper_idx = imghp.PSF_zlen
-        else
-            PSF_zlower_idx = searchsortedlast(PSF_zcoords, z)
-            PSF_zupper_idx = PSF_zlower_idx + 1
-        end
+    # for each z in zmap, compute the indices of the two PSFs (lower and upper) that z is between
+    lower_idxs = [zmap[i,j] == PSF_zcoords[end] ? imghp.PSF_zlen - 1 : searchsortedlast(PSF_zcoords, zmap[i,j])
+                  for i in 1:imghp.objN, j in 1:imghp.objN]
+    upper_idxs = lower_idxs .+ 1
+    # for each z in zmap, computer the interpolation coefficients to the two PSFs (lower and upper)
+    C_lowers = [δ_Δz(PSF_zcoords[lower_idxs[i,j]] - zmap[i,j]) for i in 1:imghp.objN, j in 1:imghp.objN]
+    C_uppers = [δ_Δz(PSF_zcoords[upper_idxs[i,j]] - zmap[i,j]) for i in 1:imghp.objN, j in 1:imghp.objN]
 
-        PSF_zlower = PSF_zcoords[PSF_zlower_idx]
-        PSF_zupper = PSF_zcoords[PSF_zupper_idx]
-
-        C_zlower = δ_Δz(PSF_zlower - z)
-        C_zupper = δ_Δz(PSF_zupper - z)
-        i == PSF_zlower_idx ? C_zlower : i == PSF_zupper_idx ? C_zupper : 0.0
-    end for  Tmap_idx1 in 1:imghp.objN, Tmap_idx2 in 1:imghp.objN, i in 1:imghp.PSF_zlen]
+    return [i == lower_idxs[Tmap_idx1, Tmap_idx2] ? C_lowers[Tmap_idx1, Tmap_idx2] :
+            i == upper_idxs[Tmap_idx1, Tmap_idx2] ? C_uppers[Tmap_idx1, Tmap_idx2] : 0.0
+            for Tmap_idx1 in 1:imghp.objN, Tmap_idx2 in 1:imghp.objN, i in 1:imghp.PSF_zlen]
 end
 
 # TODO: pass the variables wrapped in ignore_derivatives to the function directly
