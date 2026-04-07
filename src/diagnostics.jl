@@ -71,3 +71,114 @@ function test_reconstruction_gradients_random_perturbation(noisy_image, fftPSFs,
 
     return ε_values, rel_errors, fig
 end
+
+function dC_dz_AD(δ_Δz, PSF_zcoord, z)
+    diff = PSF_zcoord - z
+    dδ_ddiff = Zygote.gradient(δ_Δz, diff)[1]
+    return -dδ_ddiff
+end
+
+function test_dC_dz(imghp; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y)
+    @unpack smoothness_order, PSF_Δz = imghp
+    δ_Δz = get_discretized_δ_function(imghp)
+    PSF_zcoords = get_PSF_zcoords(imghp)
+
+    # test on a range of z values within the support of δ_Δz
+    z_test = range(imghp.PSF_zlb, imghp.PSF_zub, length = 200)
+
+    for PSF_zcoord in PSF_zcoords
+        dC_hand = [dC_dz(z, PSF_zcoord, smoothness_order, PSF_Δz) for z in z_test]
+        dC_ad   = [dC_dz_AD(δ_Δz, PSF_zcoord, z) for z in z_test]
+
+        diff_norm = norm(dC_hand - dC_ad) / norm(dC_ad)
+        @info "PSF_zcoord = $PSF_zcoord: relative difference = $diff_norm"
+    end
+
+    # plot comparison for the middle PSF_zcoord
+    PSF_zcoord_mid = PSF_zcoords[length(PSF_zcoords) ÷ 2]
+    dC_hand = [dC_dz(z, PSF_zcoord_mid, smoothness_order, PSF_Δz) for z in z_test]
+    dC_ad   = [dC_dz_AD(δ_Δz, PSF_zcoord_mid, z) for z in z_test]
+
+    fig, ax = subplots(figsize=(figsize_x, figsize_y))
+    ax.semilogy(z_test, abs.(dC_hand); label = "Hand-derived", linewidth = 1, alpha = 0.8)
+    ax.semilogy(z_test, abs.(dC_ad);   label = "AD",           linewidth = 1, alpha = 0.8, linestyle = "--")
+    ax.set_xlabel("z")
+    ax.set_ylabel("dC/dz")
+    ax.set_title("dC_dz comparison at PSF_zcoord = $PSF_zcoord_mid")
+    ax.legend()
+
+    return fig
+end
+
+function get_fftPSFs_diffable(freqs, incidents, surrogates, geoms, n2f_kernels, plans_n2f, plans_PSF,
+                               php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    PSF_zlen = imghp.PSF_zlen
+    nF = length(freqs)
+    [End2EndThermalImg.get_fftPSF(End2EndThermalImg.get_PSF_at_freq_and_z(
+        freqs[iF],
+        incidents[iF, iZ],
+        surrogates[iF],
+        geoms,
+        n2f_kernels[iF],
+        plans_n2f[1],
+        php,
+        imghp
+    ), plans_PSF[1]) for iF in 1:nF, iZ in 1:PSF_zlen]
+end
+
+function test_get_fftPSFs_gradient(jhp; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y)
+    @unpack php, imghp, opthp = jhp
+    plans_n2f, plans_PSF = get_fft_plans(php, imghp)
+    geoms = initialize_geoms(php, opthp)
+    PSF_zcoords = get_PSF_zcoords(imghp)
+    freqs = get_freq_chebpoints(php)
+    incidents = get_incident_fields(freqs, PSF_zcoords, php)
+    surrogates = load_surrogate_models(php)
+    n2f_kernels = get_n2f_kernels(freqs, plans_n2f[1], php, imghp)
+
+    fftPSFs = get_fftPSFs(freqs, incidents, surrogates, geoms, n2f_kernels, plans_n2f, plans_PSF, php, imghp)
+
+    grad_diffable = Zygote.gradient(
+        g -> sum(sum.(abs2, get_fftPSFs_diffable(freqs, incidents, surrogates, g, n2f_kernels, plans_n2f, plans_PSF, php, imghp))),
+        geoms
+    )[1]
+    grad_precomputed = Zygote.gradient(
+        g -> sum(sum.(abs2, get_fftPSFs_from_precomputed(g, fftPSFs, freqs, incidents, surrogates, n2f_kernels, plans_n2f, plans_PSF, php, imghp))),
+        geoms
+    )[1]
+
+    diff_norm = norm(grad_diffable - grad_precomputed) / norm(grad_diffable)
+    @info "Relative gradient error between diffable and precomputed: $diff_norm"
+
+    rel_diff = abs.(grad_diffable - grad_precomputed) ./ (abs.(grad_diffable) .+ eps())
+
+    fig, axes = subplots(1, 3; figsize=(3 * figsize_x, 1.5 * figsize_y))
+
+    im0 = axes[0].imshow(grad_diffable; aspect="auto")
+    axes[0].set_title("Diffable gradient")
+    fig.colorbar(im0, ax=axes[0])
+
+    im1 = axes[1].imshow(grad_precomputed; aspect="auto")
+    axes[1].set_title("Precomputed gradient")
+    fig.colorbar(im1, ax=axes[1])
+
+    im2 = axes[2].imshow(rel_diff; aspect="auto")
+    axes[2].set_title("Relative difference per component")
+    fig.colorbar(im2, ax=axes[2])
+
+    fig.suptitle("get_fftPSFs gradient comparison (rel. error = $(round(diff_norm, sigdigits=3)))")
+    fig.tight_layout()
+
+    @info "Timing diffable gradient:"
+    @btime Zygote.gradient(
+        g -> sum(sum.(abs2, get_fftPSFs_diffable($freqs, $incidents, $surrogates, g, $n2f_kernels, $plans_n2f, $plans_PSF, $php, $imghp))),
+        $geoms
+    )
+    @info "Timing precomputed gradient:"
+    @btime Zygote.gradient(
+        g -> sum(sum.(abs2, get_fftPSFs_from_precomputed(g, $fftPSFs, $freqs, $incidents, $surrogates, $n2f_kernels, $plans_n2f, $plans_PSF, $php, $imghp))),
+        $geoms
+    )
+
+    return diff_norm, fig
+end
