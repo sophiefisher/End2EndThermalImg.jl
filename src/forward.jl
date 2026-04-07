@@ -252,7 +252,7 @@ end
 
 # smoothness_order = 0 yields the triangle function
 function get_discretized_δ_function(smoothness_order, Δz)
-    g = z -> f_δ(smoothness_order, z) / ( f_δ(smoothness_order, z) + f_δ(smoothness_order, 1-z) )
+    g = z -> f_δ(z, smoothness_order) / ( f_δ(z, smoothness_order) + f_δ(1-z, smoothness_order) )
     δ = z -> (-g(z ./ Δz) - g(-z ./ Δz) + 1) .* (1/Δz)
     δ
 end
