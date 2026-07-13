@@ -2,20 +2,21 @@
 
 #SBATCH --job-name=compute_surrogate_model
 #SBATCH --output=logs/log-%j-%x.out
-#SBATCH -n 15
-#SBATCH -c 24
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=48
+
 #initialize module command
 source /etc/profile
 
 #load anaconda
-module load anaconda/2023a
-module load julia/1.10.1  
+module load anaconda/Python-ML-2025a
+module load julia/1.11.3
 
-echo "Number of tasks: $SLURM_NTASKS"
-echo "Cores per task: $SLURM_CPUS_PER_TASK"
-TOTAL_CORES=$((SLURM_NTASKS * SLURM_CPUS_PER_TASK))
-echo "Total logical cores used: $TOTAL_CORES"
-
-PROJECT_DIR="~/End2EndThermalImg.jl/Project.toml"
+export OPENBLAS_NUM_THREADS=3
+export OMP_NUM_THREADS=3
+export MKL_NUM_THREADS=3
 export JULIA_CONDAPKG_BACKEND="Null"
-julia --project=${PROJECT_DIR} -p ${SLURM_NTASKS} scripts/compute_surrogate_model.jl
+PROJECT_DIR="$HOME/End2EndThermalImg.jl"
+
+julia --project=${PROJECT_DIR} -p 15 scripts/compute_surrogate_model.jl
