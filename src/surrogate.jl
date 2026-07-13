@@ -119,7 +119,7 @@ function plot_surrogate_models(php::PhysicsHyperParams)
     surrogate_label = get_surrogate_label(php)
     freq_chebpoints = get_freq_chebpoints(php)
     width_chebpoints = get_width_chebpoints(php)
-    widths_linear = LinRange(php.pillar_width_lb, php.pillar_width_ub, 1000)
+    widths_linear = collect(LinRange(php.pillar_width_lb, php.pillar_width_ub, 1000))
     f = figure(figsize=(8, 2.5*(php.freq_order+1) ))
     for i in eachindex(freq_chebpoints)
         freq = freq_chebpoints[i]
