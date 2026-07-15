@@ -102,7 +102,7 @@ end
 function load_surrogate_models(php::PhysicsHyperParams)
     filepath = get_surrogate_filename(php)
     transmission_matrix = Matrix(CSV.read(filepath, DataFrame, types=Complex{Float64}))::Matrix{ComplexF64}
-    surrogates = [chebinterp(transmission_matrix[i,:], php.pillar_width_lb, php.pillar_width_ub) for i in 1:php.freq_order + 1]::Vector{FastChebInterp.ChebPoly{1, ComplexF64, Float64}}
+    surrogates = [chebinterp(transmission_matrix[:,i], php.pillar_width_lb, php.pillar_width_ub) for i in 1:php.freq_order + 1]::Vector{FastChebInterp.ChebPoly{1, ComplexF64, Float64}}
     return surrogates
 end
 
