@@ -45,9 +45,17 @@ end
 freqs = End2EndThermalImg.get_freq_chebpoints(php)
 PSF_zcoords = End2EndThermalImg.get_PSF_zcoords(imghp)
 
+@everywhere using Base.Threads
+
 @everywhere function compute_incident_shard(shard_idx, nshards, freqs, PSF_zcoords, php)
     grid_inds = End2EndThermalImg.shard_grid_indices((length(freqs), length(PSF_zcoords)), nshards, shard_idx)
-    Dict(Tuple(idx) => End2EndThermalImg.get_incident_field(freqs[idx[1]], PSF_zcoords[idx[2]], php) for idx in grid_inds)
+    shard_keys = Tuple.(grid_inds)
+    shard_vals = Vector{Matrix{ComplexF64}}(undef, length(grid_inds))
+    @threads for i in eachindex(grid_inds)
+        idx = grid_inds[i]
+        shard_vals[i] = End2EndThermalImg.get_incident_field(freqs[idx[1]], PSF_zcoords[idx[2]], php)
+    end
+    Dict(zip(shard_keys, shard_vals))
 end
 
 # distributed: shard the (freq, z) grid across every worker/node
