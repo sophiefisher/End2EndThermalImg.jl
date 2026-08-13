@@ -83,7 +83,16 @@ function get_incident_field(freq, z, php::PhysicsHyperParams)
 end
 
 function get_incident_fields(freqs, PSF_zcoords, php::PhysicsHyperParams)
-    incidents = [get_incident_field(freq, z, php) for freq in freqs, z in PSF_zcoords]
+    nF = length(freqs)
+    nZ = length(PSF_zcoords)
+    incidents = Matrix{Matrix{ComplexF64}}(undef, nF, nZ)
+    inds = CartesianIndices((1:nF, 1:nZ))
+
+    @threads for idx in eachindex(inds)
+        I = inds[idx]
+        iF, iZ = I[1], I[2]
+        incidents[iF, iZ] = get_incident_field(freqs[iF], PSF_zcoords[iZ], php)
+    end
     incidents
 end
 
@@ -132,8 +141,12 @@ function get_n2f_kernel(freq, plan_n2f, php::PhysicsHyperParams, imghp::ImagingH
     out
 end
 
-function get_n2f_kernels(freqs, plan_n2f, php::PhysicsHyperParams, imghp::ImagingHyperParams)
-    n2f_kernels = [get_n2f_kernel(freq, plan_n2f, php, imghp) for freq in freqs]
+function get_n2f_kernels(freqs, plans_n2f, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    n2f_kernels = Vector{Matrix{ComplexF64}}(undef, length(freqs))
+
+    @threads for iF in eachindex(freqs)
+        n2f_kernels[iF] = get_n2f_kernel(freqs[iF], plans_n2f[threadid()], php, imghp)
+    end
     n2f_kernels
 end
 
