@@ -28,6 +28,7 @@ module End2EndThermalImg
     using PythonCall
     using LaTeXStrings
     using Distributed
+    using SlurmClusterManager
     using QuadratureRules
     using InteractiveUtils
     using Zygote
@@ -53,6 +54,7 @@ module End2EndThermalImg
     end
 
     include("prepare.jl")
+    include("distributed.jl")
     include("forward.jl")
     include("backward.jl")
     include("optimize.jl")
