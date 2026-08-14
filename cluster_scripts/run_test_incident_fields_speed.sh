@@ -18,7 +18,9 @@ PROJECT_DIR="$HOME/End2EndThermalImg.jl"
 
 # precompile once, serially, before the driver and workers below start concurrently --
 # they share the same networked depot (~/.julia), so without this they each race to
-# precompile the same packages at once and end up lock-waiting on each other
-julia --project=${PROJECT_DIR} -e 'import Pkg; Pkg.instantiate(); Pkg.precompile()'
+# precompile the same packages at once and end up lock-waiting on each other. --threads
+# must match the run below, since some packages' caches are invalidated when reloaded
+# under a different thread count, which otherwise forces a second precompile pass.
+julia --project=${PROJECT_DIR} --threads=${SLURM_CPUS_PER_TASK} -e 'import Pkg; Pkg.instantiate(); Pkg.precompile()'
 
 julia --project=${PROJECT_DIR} --threads=${SLURM_CPUS_PER_TASK} scripts/test_incident_fields_speed.jl
