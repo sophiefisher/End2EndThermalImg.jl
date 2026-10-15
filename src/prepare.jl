@@ -90,18 +90,34 @@ end
 
 abstract type AbstractObjectType end
 
+# Noise model applied in image formation (make_noisy_image_from_3D[_distributed]): FixedNoise
+# adds noise at a fixed absolute level (image .+ noise_scale .* noise, the original behavior);
+# RelativeNoise scales it by the mean image value instead (image .+ mean(image) .* noise_scale
+# .* noise), so noise_scale parameterizes a percentage of the mean rather than an absolute level.
+abstract type AbstractNoiseType end
+
+struct FixedNoise{FloatType <: AbstractFloat} <: AbstractNoiseType
+    noise_scale::FloatType
+end
+
+struct RelativeNoise{FloatType <: AbstractFloat} <: AbstractNoiseType
+    noise_scale::FloatType
+end
+
+apply_noise(nt::FixedNoise, image, noise) = image .+ nt.noise_scale .* noise
+apply_noise(nt::RelativeNoise, image, noise) = image .+ mean(image) .* nt.noise_scale .* noise
+
 struct ImagingHyperParams{FloatType <: AbstractFloat, IntType <: Integer}
-    objN::IntType # number of object pixels in the x and y directions 
+    objN::IntType # number of object pixels in the x and y directions
     imgN::IntType # number of image pixels in the x and y directions
     binN::IntType # how much to bin each sensor pixel (binN x binN subpixels)
     sampleN::IntType # how many points to sample per subpixel (which has length unit_cell_length, i.e. the metasurface unit cell length)
     PSF_zlb_μm::FloatType
     PSF_zub_μm::FloatType
     PSF_zlen::IntType
-    PSF_scale::FloatType
     smoothness_order::FloatType # smoothness order of the discretized δ function
     object_type::AbstractObjectType # type of object to generate
-    noise_level # noise percentage of the mean image
+    noise_type::AbstractNoiseType # noise model (and scale) applied in image formation
 
     # Computed parameters
     PSF_zlb::FloatType
@@ -110,7 +126,7 @@ struct ImagingHyperParams{FloatType <: AbstractFloat, IntType <: Integer}
     PSF_Δz::FloatType
 end
 
-function ImagingHyperParams(; 
+function ImagingHyperParams(;
     objN::IntType,
     imgN::IntType,
     binN::IntType,
@@ -118,10 +134,9 @@ function ImagingHyperParams(;
     PSF_zlb_μm::FloatType,
     PSF_zub_μm::FloatType,
     PSF_zlen::IntType,
-    PSF_scale::FloatType,
     smoothness_order::FloatType,
     object_type::AbstractObjectType,
-    noise_level::FloatType,
+    noise_type::AbstractNoiseType,
     php::PhysicsHyperParams
 ) where {FloatType <: AbstractFloat, IntType <: Integer}
     wavcen = php.wavcen
@@ -129,7 +144,7 @@ function ImagingHyperParams(;
     PSF_zub = PSF_zub_μm / wavcen
     PSF_Δz_μm = (PSF_zub_μm - PSF_zlb_μm) / (PSF_zlen - 1)
     PSF_Δz = PSF_Δz_μm / wavcen
-    
+
     return ImagingHyperParams{FloatType, IntType}(
         objN,
         imgN,
@@ -138,10 +153,9 @@ function ImagingHyperParams(;
         PSF_zlb_μm,
         PSF_zub_μm,
         PSF_zlen,
-        PSF_scale,
         smoothness_order,
         object_type,
-        noise_level,
+        noise_type,
         PSF_zlb,
         PSF_zub,
         PSF_Δz_μm,
@@ -264,24 +278,27 @@ struct ReconstructionHyperParams{FloatType <: AbstractFloat}
     object_init_type::String # how to initialize the object for reconstruction
     T_background::FloatType
     z_middle_μm::FloatType
+    algorithm::Symbol # NLopt algorithm used by reconstruct_Tmap_and_zmap[_distributed], e.g. :LD_LBFGS, :LD_MMA
 
     # Computed parameters
     z_middle::FloatType
 end
 
-function ReconstructionHyperParams(; 
+function ReconstructionHyperParams(;
     object_init_type::String,
     T_background::FloatType,
     z_middle_μm::FloatType,
+    algorithm::Symbol = :LD_LBFGS,
     php::PhysicsHyperParams
 ) where {FloatType <: AbstractFloat}
     wavcen = php.wavcen
     z_middle = z_middle_μm / wavcen
-    
+
     return ReconstructionHyperParams{FloatType}(
         object_init_type,
         T_background,
         z_middle_μm,
+        algorithm,
         z_middle
     )
 end
@@ -326,6 +343,19 @@ function initialize_object(imghp::ImagingHyperParams, rechp::ReconstructionHyper
         center_zcoord = PSF_zcoords[center_zcoord_idx]
         zmap = fill(center_zcoord, objN, objN)
         return (; Tmap, zmap)
+    elseif object_init_type == "uniform_offset"
+        # same as "uniform", except zmap starts halfway between the center PSF_zcoords node and
+        # its upper neighbor rather than exactly on the node -- get_C_interp_3D's depth-interpolation
+        # weights have zero derivative wrt z exactly at a node (the discretized delta function is
+        # flat at both ends of its support), so a reconstruction started there gets an identically
+        # zero z-gradient and z never moves; the midpoint between nodes is where that derivative is
+        # largest, giving z the strongest starting gradient
+        Tmap = fill(T_background, objN, objN)
+        center_zcoord_idx = cld(length(PSF_zcoords), 2)
+        zmap = fill(PSF_zcoords[center_zcoord_idx] + imghp.PSF_Δz / 2, objN, objN)
+        return (; Tmap, zmap)
+    else
+        error("unknown object_init_type: $object_init_type")
     end
 end
 

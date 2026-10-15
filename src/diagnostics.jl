@@ -111,7 +111,7 @@ function test_dC_dz(imghp; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FI
 end
 
 function get_fftPSFs_diffable(freqs, incidents, surrogates, geoms, n2f_kernels, plans_n2f, plans_PSF,
-                               php::PhysicsHyperParams, imghp::ImagingHyperParams)
+                               php::PhysicsHyperParams, imghp::ImagingHyperParams, PSF_scale)
     PSF_zlen = imghp.PSF_zlen
     nF = length(freqs)
     [End2EndThermalImg.get_fftPSF(End2EndThermalImg.get_PSF_at_freq_and_z(
@@ -122,11 +122,12 @@ function get_fftPSFs_diffable(freqs, incidents, surrogates, geoms, n2f_kernels, 
         n2f_kernels[iF],
         plans_n2f[1],
         php,
-        imghp
+        imghp,
+        PSF_scale
     ), plans_PSF[1]) for iF in 1:nF, iZ in 1:PSF_zlen]
 end
 
-function test_get_fftPSFs_gradient(jhp; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y)
+function test_get_fftPSFs_gradient(jhp; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y, PSF_scale = 1.0)
     @unpack php, imghp, opthp = jhp
     plans_n2f, plans_PSF = get_fft_plans(php, imghp)
     geoms = initialize_geoms(php, opthp)
@@ -136,14 +137,14 @@ function test_get_fftPSFs_gradient(jhp; figsize_x = DEFAULT_FIGSIZE_X, figsize_y
     surrogates = load_surrogate_models(php)
     n2f_kernels = get_n2f_kernels(freqs, plans_n2f[1], php, imghp)
 
-    fftPSFs = get_fftPSFs(freqs, incidents, surrogates, geoms, n2f_kernels, plans_n2f, plans_PSF, php, imghp)
+    fftPSFs = get_fftPSFs(freqs, incidents, surrogates, geoms, n2f_kernels, plans_n2f, plans_PSF, php, imghp, PSF_scale)
 
     grad_diffable = Zygote.gradient(
-        g -> sum(sum.(abs2, get_fftPSFs_diffable(freqs, incidents, surrogates, g, n2f_kernels, plans_n2f, plans_PSF, php, imghp))),
+        g -> sum(sum.(abs2, get_fftPSFs_diffable(freqs, incidents, surrogates, g, n2f_kernels, plans_n2f, plans_PSF, php, imghp, PSF_scale))),
         geoms
     )[1]
     grad_precomputed = Zygote.gradient(
-        g -> sum(sum.(abs2, get_fftPSFs_from_precomputed(g, fftPSFs, freqs, incidents, surrogates, n2f_kernels, plans_n2f, plans_PSF, php, imghp))),
+        g -> sum(sum.(abs2, get_fftPSFs_from_precomputed(g, fftPSFs, freqs, incidents, surrogates, n2f_kernels, plans_n2f, plans_PSF, php, imghp, PSF_scale))),
         geoms
     )[1]
 
@@ -171,12 +172,12 @@ function test_get_fftPSFs_gradient(jhp; figsize_x = DEFAULT_FIGSIZE_X, figsize_y
 
     @info "Timing diffable gradient:"
     @btime Zygote.gradient(
-        g -> sum(sum.(abs2, get_fftPSFs_diffable($freqs, $incidents, $surrogates, g, $n2f_kernels, $plans_n2f, $plans_PSF, $php, $imghp))),
+        g -> sum(sum.(abs2, get_fftPSFs_diffable($freqs, $incidents, $surrogates, g, $n2f_kernels, $plans_n2f, $plans_PSF, $php, $imghp, $PSF_scale))),
         $geoms
     )
     @info "Timing precomputed gradient:"
     @btime Zygote.gradient(
-        g -> sum(sum.(abs2, get_fftPSFs_from_precomputed(g, $fftPSFs, $freqs, $incidents, $surrogates, $n2f_kernels, $plans_n2f, $plans_PSF, $php, $imghp))),
+        g -> sum(sum.(abs2, get_fftPSFs_from_precomputed(g, $fftPSFs, $freqs, $incidents, $surrogates, $n2f_kernels, $plans_n2f, $plans_PSF, $php, $imghp, $PSF_scale))),
         $geoms
     )
 

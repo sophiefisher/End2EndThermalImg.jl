@@ -33,12 +33,21 @@ function planned_ifft!(x)
 end =#
 
 # TODO: think about whether these should be in-place
-function get_fft_plans(php::PhysicsHyperParams, imghp::ImagingHyperParams)
+# `n` (the number of plans to create, one per thread) is a keyword defaulting to nthreads(), NOT
+# hard-called internally: when this function is dispatched to a worker via remotecall from within
+# another compiled package function (as setup_fft_plans_distributed!, src/distributed.jl, does),
+# nthreads() called *inside* get_fft_plans was found to silently see 1 instead of the worker's
+# real thread count, even though the very same Threads.nthreads() call is completely reliable when
+# made directly (not nested inside this method) in that same context -- some form of world-age/
+# compilation quirk specific to nthreads() resolved from within a method reached this way. Querying
+# nthreads() at the call site (reliable) and passing it in here sidesteps the whole issue; ordinary
+# (single-process) callers can keep omitting it.
+function get_fft_plans(php::PhysicsHyperParams, imghp::ImagingHyperParams; n::Integer = nthreads())
     n2f_size = get_n2f_size(php, imghp)
     PSF_size = imghp.objN + imghp.imgN
-    plans_n2f = Vector{FFTW.cFFTWPlan}(undef, nthreads())
-    plans_PSF = Vector{FFTW.cFFTWPlan}(undef, nthreads())
-    for t in 1:nthreads()
+    plans_n2f = Vector{FFTW.cFFTWPlan}(undef, n)
+    plans_PSF = Vector{FFTW.cFFTWPlan}(undef, n)
+    for t in 1:n
         plans_n2f[t] = plan_fft(zeros(ComplexF64, (n2f_size, n2f_size)), flags=FFTW.MEASURE)
         plans_PSF[t] = plan_fft(zeros(ComplexF64, (PSF_size, PSF_size)), flags=FFTW.MEASURE)
     end
@@ -58,6 +67,18 @@ function convolve(inp, kernel, plan)
 
     out = out_pad[inpL+1:kerL, inpL+1:kerL]
     out
+end
+
+function convolveT(out, kernel, plan)
+    outL = size(out, 1)
+    kerL = size(kernel, 1)
+    inpL = kerL - outL
+
+    out_pad = [zeros(inpL, inpL) zeros(inpL, outL); zeros(outL, inpL) out]
+    arr_pad = plan * ((plan \ out_pad) .* kernel )
+    
+    arr = arr_pad[1:inpL, 1:inpL]
+    arr
 end
 
 function efield_point_source(x, y, z, k)
@@ -157,7 +178,12 @@ end
 
 # TODO: should I really be dividing by freq to get photon count here?
 function far_field_to_PSF(far_field, freq, unit_cell_length, binN, sampleN, PSF_scale)
-    far_field_abs = abs.(far_field).^2
+    # abs2.(far_field), not abs.(far_field).^2 -- identical forward value, but abs(::Complex)'s
+    # reverse-mode AD rule is a known trouble spot (Wirtinger-derivative convention) and composing
+    # it with squaring was found to produce a geoms-gradient exactly 2x too large (confirmed via an
+    # isolated rrule-only finite-difference check against get_fftPSFs_from_precomputed_distributed's
+    # custom pullback); abs2's own direct pullback rule doesn't have this issue.
+    far_field_abs = abs2.(far_field)
     psfN = size(far_field, 1) ÷ sampleN ÷ binN
     far_field_abs_integrated = reshape(far_field_abs, (sampleN * binN, psfN, sampleN * binN, psfN))
     far_field_abs_integrated = sum(far_field_abs_integrated, dims=(1, 3)) 
@@ -167,16 +193,26 @@ function far_field_to_PSF(far_field, freq, unit_cell_length, binN, sampleN, PSF_
     PSF
 end
 
-function far_field_to_PSF(far_field, freq, php::PhysicsHyperParams, imghp::ImagingHyperParams)
-    far_field_to_PSF(far_field, freq, php.unit_cell_length, imghp.binN, imghp.sampleN, imghp.PSF_scale)
+function far_field_to_PSF(far_field, freq, php::PhysicsHyperParams, imghp::ImagingHyperParams, PSF_scale)
+    far_field_to_PSF(far_field, freq, php.unit_cell_length, imghp.binN, imghp.sampleN, PSF_scale)
 end
 
-function get_PSF_at_freq_and_z(freq, incident, surrogate, geoms, n2f_kernel, plan_n2f, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+function get_PSF_at_freq_and_z(freq, incident, surrogate, geoms, n2f_kernel, plan_n2f, php::PhysicsHyperParams, imghp::ImagingHyperParams, PSF_scale)
     near = get_near_field(incident, surrogate, geoms, imghp)
     far = near_to_far_field(near, n2f_kernel, plan_n2f)
-    PSF = far_field_to_PSF(far, freq, php, imghp)
+    PSF = far_field_to_PSF(far, freq, php, imghp, PSF_scale)
     PSF
 end
+
+# PSF_scale enters the forward model purely multiplicatively (far_field_to_PSF's last step), so
+# everything downstream (PSF, fftPSF, image) is exactly linear in it -- no iteration/root-finding
+# needed to pick a scale that gives a target image magnitude. Compute an `image` once at any
+# reference scale (e.g. 1.0, using the initial geoms, the true object, and whichever
+# serial/distributed image-formation path the caller is using), then this returns the PSF_scale
+# that would make mean(image) == target_mean exactly, since
+# mean(image_at(PSF_scale)) == (PSF_scale / reference_scale) * mean(image_at(reference_scale)).
+choose_PSF_scale(image_at_reference_scale, reference_scale = 1.0; target_mean = 1.0) =
+    reference_scale * target_mean / mean(image_at_reference_scale)
 
 # function get_PSFs_distributed(freqs, incidents, surrogates, geoms, n2f_kernels, php::PhysicsHyperParams, imghp::ImagingHyperParams)
 #     PSF_zlen = imghp.PSF_zlen
@@ -189,11 +225,11 @@ end
 # end
 
 function get_PSFs(freqs, incidents, surrogates, geoms, n2f_kernels, plans_n2f,
-                           php::PhysicsHyperParams, imghp::ImagingHyperParams)
+                           php::PhysicsHyperParams, imghp::ImagingHyperParams, PSF_scale)
 
     PSF_zlen = imghp.PSF_zlen
     nF = length(freqs)
-    # TODO add size of PSF below? 
+    # TODO add size of PSF below?
     PSFs = Matrix{Matrix{Float64}}(undef, nF, PSF_zlen)
     inds = CartesianIndices((1:nF, 1:PSF_zlen))
 
@@ -210,7 +246,8 @@ function get_PSFs(freqs, incidents, surrogates, geoms, n2f_kernels, plans_n2f,
             n2f_kernels[iF],
             plans_n2f[tid],
             php,
-            imghp
+            imghp,
+            PSF_scale
         )
     end
     return PSFs
@@ -229,7 +266,7 @@ get_fftPSF(PSF, plan_PSF) = plan_PSF * complex.(PSF)
 # end
 
 function get_fftPSFs(freqs, incidents, surrogates, geoms, n2f_kernels, plans_n2f, plans_PSF,
-                           php::PhysicsHyperParams, imghp::ImagingHyperParams)
+                           php::PhysicsHyperParams, imghp::ImagingHyperParams, PSF_scale)
 
     PSF_zlen = imghp.PSF_zlen
     nF = length(freqs)
@@ -249,7 +286,8 @@ function get_fftPSFs(freqs, incidents, surrogates, geoms, n2f_kernels, plans_n2f
             n2f_kernels[iF],
             plans_n2f[tid],
             php,
-            imghp
+            imghp,
+            PSF_scale
         ), plans_PSF[tid])
     end
     return fftPSFs
@@ -277,11 +315,14 @@ end
 
 function get_black_body_spectrum(Tmap_zslice, php::PhysicsHyperParams)
     freqs = ChainRulesCore.ignore_derivatives( ()-> get_freq_chebpoints(php))
-    b = [(2 .* freq ^3 ) ./ (exp.(ħ .* (freq .* c .* 10^6 / php.wavcen) ./ (kB .* Tmap_zslice) ) .- 1) for freq in freqs]
+    b = [(2 .* freq ^3 ) ./ (exp.(h .* (freq .* c .* 10^6 / php.wavcen) ./ (kB .* Tmap_zslice) ) .- 1) for freq in freqs]
     b
 end
 
 convolve_with_fftPSF_at_freq_and_z(fftPSF_at_freq_and_z, b_at_freq_and_z, plan_PSF) = real.(convolve(b_at_freq_and_z, fftPSF_at_freq_and_z, plan_PSF))
+
+convolveT_with_fftPSF_at_freq_and_z(fftPSF_at_freq_and_z, spectrum, plan_PSF) = real.(convolveT(spectrum, fftPSF_at_freq_and_z, plan_PSF))
+
 
 function make_image_at_z(spectrum_at_z, fftPSFs_at_z, weights, plan_PSF)
     image = sum(
@@ -342,6 +383,18 @@ function get_C_interp_3D(zmap, PSF_zcoords, δ_Δz, imghp::ImagingHyperParams)
 end
 
 # TODO: pass the variables wrapped in ignore_derivatives to the function directly
+#
+# Iterates (iF, iZ) as a double sum with single-element fftPSFs[iF, iZ] indexing (matching
+# Λ_dot_dFdo/Λ_dot_dFdo_distributed's proven-safe pattern, backward*.jl) rather than slicing a
+# whole column via fftPSFs[:, iZ] + make_image_at_z's broadcast over it (the original
+# implementation): ChainRules' generic getindex rrule for a non-bits-element array (fftPSFs is a
+# Matrix{Matrix{ComplexF64}}) can corrupt the pullback when a slice like this is indexed directly
+# inside a closure Zygote differentiates -- confirmed empirically by a RelativeNoise noise model
+# (src/prepare.jl) that makes the cotangent reaching fftPSFs non-disjoint across iZ terms (via a
+# mean(image)-based coupling that FixedNoise's simple elementwise case never exercised),
+# triggering an UndefRefError inside ChainRules' array-slicing rrule. Mathematically identical to
+# the original (same weighted sum, just iF/iZ reassociated), so this changes nothing numerically
+# for any noise model, including the ones already validated against this function.
 function make_image_from_3D(object, fftPSFs, weights, plan_PSF, php::PhysicsHyperParams, imghp::ImagingHyperParams)
     δ_Δz = ignore_derivatives( ()-> get_discretized_δ_function(imghp.smoothness_order, imghp.PSF_Δz))
     PSF_zcoords = ignore_derivatives( ()-> get_PSF_zcoords(imghp))
@@ -350,11 +403,13 @@ function make_image_from_3D(object, fftPSFs, weights, plan_PSF, php::PhysicsHype
     B = get_black_body_spectrum(object.Tmap, php)
 
     image = sum(
-        iZ -> begin
-            spectrum = [b .* C_interp_3D[:, :, iZ] for b in B]
-            image_at_z = make_image_at_z(spectrum, fftPSFs[:, iZ], weights, plan_PSF)
-        end,
-    eachindex(PSF_zcoords))
+        iF -> sum(
+            iZ -> begin
+                spectrum = B[iF] .* C_interp_3D[:, :, iZ]
+                weights[iF] .* convolve_with_fftPSF_at_freq_and_z(fftPSFs[iF, iZ], spectrum, plan_PSF)
+            end,
+            eachindex(PSF_zcoords)),
+        eachindex(B))
     image
 end
 
@@ -377,10 +432,10 @@ generate_noise(imghp) = randn((imghp.imgN, imghp.imgN))
 
 # pass noise to function
 function make_noisy_image_from_3D(
-    object, fftPSFs, weights, noise, noise_scale, plan_PSF, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    object, fftPSFs, weights, noise, noise_type::AbstractNoiseType, plan_PSF, php::PhysicsHyperParams, imghp::ImagingHyperParams)
 
     image = make_image_from_3D(object, fftPSFs, weights, plan_PSF, php, imghp)
-    noisy_image = image .+ noise_scale .* noise
+    noisy_image = apply_noise(noise_type, image, noise)
     return noisy_image
 end
 
@@ -399,25 +454,35 @@ end
 function reconstruct_Tmap_and_zmap(noisy_image, fftPSFs, weights, plan_PSF, α, β, jhp::JobHyperParams; xtol_rel = 1e-8, maxeval = 5000, iteration_print = 50, verbose = false)
     verbose && @info "Starting object reconstruction"
     @unpack php, imghp, rechp = jhp
-    @unpack T_background, z_middle = rechp
-    
+    @unpack T_background, z_middle, algorithm = rechp
+
     objective_history = Float64[]
     object_init = initialize_object(imghp, rechp)
     object_init_flat = flatten_object(object_init)
-    
-    opt = Opt(:LD_LBFGS, 2 * imghp.objN^2) # TODO: check algorithm choice
-    lower_bounds!(opt, [fill(eps(), imghp.objN^2); fill(imghp.PSF_zlb, imghp.objN^2)])
-    upper_bounds!(opt, [fill(Inf, imghp.objN^2); fill(imghp.PSF_zub, imghp.objN^2)])
-    objective_lambda = object_flat -> reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, plan_PSF, α, β, T_background, z_middle, php, imghp)
+
+    # see reconstruct_Tmap_and_zmap_distributed (forward_distributed.jl) for why this rescaling is
+    # needed: T (~T_background) and z (~z_middle) live on very different absolute scales, so
+    # LD_LBFGS's single xtol_rel can be satisfied for the whole flattened vector while z is still
+    # far from a stationary point. object_opt (returned below) is still in physical units.
+    T_scale = T_background
+    z_scale = abs(z_middle)
+    scale_vec = [fill(T_scale, imghp.objN^2); fill(z_scale, imghp.objN^2)]
+    to_scaled(x_physical) = x_physical ./ scale_vec
+    to_physical(x_scaled) = x_scaled .* scale_vec
+
+    opt = Opt(algorithm, 2 * imghp.objN^2)
+    lower_bounds!(opt, to_scaled([fill(eps(), imghp.objN^2); fill(imghp.PSF_zlb, imghp.objN^2)]))
+    upper_bounds!(opt, to_scaled([fill(Inf, imghp.objN^2); fill(imghp.PSF_zub, imghp.objN^2)]))
+    objective_lambda = x_scaled -> reconstruction_objective(to_physical(x_scaled), noisy_image, fftPSFs, weights, plan_PSF, α, β, T_background, z_middle, php, imghp)
     objective_wrapped_lambda = (x, grad) -> nlopt_wrap_objective_autodiff(x, grad, objective_lambda, objective_history; iteration_print = iteration_print, verbose = verbose)
     min_objective!(opt, objective_wrapped_lambda)
     xtol_rel!(opt, xtol_rel)
     maxeval!(opt, maxeval)
 
-    (objective_opt, object_opt_flat, return_value) = NLopt.optimize!(opt, object_init_flat)
+    (objective_opt, x_opt_scaled, return_value) = NLopt.optimize!(opt, to_scaled(object_init_flat))
     verbose && @info "Done object reconstruction"
     verbose && @info "Optimization results" objective_opt return_value
-    object_opt = unflatten_object(object_opt_flat)
+    object_opt = unflatten_object(to_physical(x_opt_scaled))
     (; objective_opt, object_opt, return_value, objective_history)
 end
 
