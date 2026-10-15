@@ -3,7 +3,20 @@ function setup_cluster_workers(; n_local_workers = max(Sys.CPU_THREADS ÷ 2, 1))
         # one worker per SLURM task (pair with --ntasks-per-node=1 for one worker per node),
         # each worker's own thread pool sized to its allocated cores for local @threads use
         cpus_per_task = parse(Int, get(ENV, "SLURM_CPUS_PER_TASK", "1"))
-        addprocs(SlurmManager(); exeflags = "--threads=$(cpus_per_task)")
+        # JULIA_PKG_PRECOMPILE_AUTO=0 for the workers only: with --nodes equal to the number of
+        # worker tasks (no node reserved purely for the driver), one worker always ends up
+        # co-located with the driver's own process, and 8+ fresh processes all calling `using
+        # End2EndThermalImg` within moments of each other (even across nodes, since ~/.julia is a
+        # shared networked depot) was observed to produce heavy precompile-lock contention
+        # ("Being precompiled by another machine" repeated hundreds of times in cluster job
+        # logs), even though the driver's own prior `Pkg.precompile()` step (see
+        # cluster_scripts/run_time_pipeline.sh) already populated a valid cache. This tells a
+        # worker that finds the cache not-yet-visible to just JIT-compile in memory and move on,
+        # rather than attempt to acquire a write-lock on the cache itself -- quieter logs, at the
+        # cost of silently eating the JIT cost in-process (no disk-cache benefit) on whichever
+        # worker(s) actually hit that race.
+        addprocs(SlurmManager(); exeflags = "--threads=$(cpus_per_task)",
+                 env = Dict("JULIA_PKG_PRECOMPILE_AUTO" => "0"))
     else
         addprocs(n_local_workers; exeflags = "--threads=$(max(Sys.CPU_THREADS ÷ n_local_workers, 1))")
     end
