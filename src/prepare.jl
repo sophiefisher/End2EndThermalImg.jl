@@ -272,6 +272,7 @@ end
 
 @with_kw struct OptimizeHyperParams
     geoms_init_type::String # how to initialize the metasurface for the end-to-end
+    geoms_init_path::String = "" # only used when geoms_init_type == "loaded" (see load_geoms, src/inversedesign.jl)
 end
 
 struct ReconstructionHyperParams{FloatType <: AbstractFloat}
@@ -336,15 +337,17 @@ function get_wavcen(λlb_μm, λub_μm)
 end
 
 function initialize_geoms(php::PhysicsHyperParams, opthp::OptimizeHyperParams)
-    geoms_init_type = opthp.geoms_init_type
-    initialize_geoms(php, geoms_init_type)
+    opthp.geoms_init_type == "loaded" && return load_geoms(php, opthp.geoms_init_path)
+    initialize_geoms(php, opthp.geoms_init_type)
 end
 
 function initialize_geoms(php::PhysicsHyperParams, geoms_init_type)
     @unpack num_unit_cells, pillar_width_lb, pillar_width_ub = php
-    
+
     if geoms_init_type == "uniform"
         return fill((pillar_width_lb + pillar_width_ub)/2, num_unit_cells, num_unit_cells)
+    else
+        error("Unrecognized geoms_init_type: $geoms_init_type")
     end
 end
 

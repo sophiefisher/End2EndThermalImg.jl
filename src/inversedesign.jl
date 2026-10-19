@@ -9,6 +9,18 @@ function ensure_inversedesign_folder()
     return folder
 end
 
+# Loads geoms saved by design_monochromatic_lens (opthp.geoms_init_type == "loaded", with
+# opthp.geoms_init_path pointing at a run folder, e.g. "inversedesign/monochromatic_lens_<datetime>").
+# The size check guards against loading a design made with a different num_unit_cells, which would
+# otherwise only surface later as a confusing dimension mismatch somewhere downstream.
+function load_geoms(php::PhysicsHyperParams, path::String)
+    geoms_opt_flat = JLD2.load(joinpath(path, "results.jld2"), "geoms_opt_flat")
+    geoms = unflatten_square_matrix(geoms_opt_flat)
+    size(geoms) == (php.num_unit_cells, php.num_unit_cells) ||
+        error("Loaded geoms size $(size(geoms)) doesn't match php.num_unit_cells = $(php.num_unit_cells)")
+    geoms
+end
+
 # TODO: add verbose option; apply to wrap objective function and @info statements
 function design_monochromatic_lens(php, imghp; geoms_init_type = "uniform", xtol_rel = 1e-8, maxeval = 5000, iteration_print = 50, plot_PSFs = false, log_scale = true, verbose = true, target_objective = 1.0)
     datetime = now()
@@ -78,10 +90,12 @@ function design_monochromatic_lens(php, imghp; geoms_init_type = "uniform", xtol
         for (z_idx, zcoord) in enumerate(PSF_zcoords)
             if z_idx == center_zcoord_idx
                 extra_title = "[Design depth. index: $(z_idx)/$(length(PSF_zcoords))]"
+                center_tag = "_center"
             else
                 extra_title = "[index: $(z_idx)/$(length(PSF_zcoords))]"
+                center_tag = ""
             end
-            plot_PSFs_at_z(PSFs[:, z_idx], zcoord, freqs; savefile = "$(run_folder)/PSFs_z_$(zcoord).png", vmin = vmin, vmax = vmax, extra_title = extra_title, log_scale = log_scale)
+            plot_PSFs_at_z(PSFs[:, z_idx], zcoord, freqs; savefile = "$(run_folder)/PSFs_z_$(zcoord)$(center_tag).png", vmin = vmin, vmax = vmax, extra_title = extra_title, log_scale = log_scale)
         end
     end
 
