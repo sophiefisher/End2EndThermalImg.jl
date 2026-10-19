@@ -450,14 +450,15 @@ function reconstruction_objective(object_flat, noisy_image, fftPSFs, weights, pl
     error_image + regularization_τ + regularization_ζ
 end
 
-# TODO: might want to set xtol_rel, maxeval, as rechp parameters
-function reconstruct_Tmap_and_zmap(noisy_image, fftPSFs, weights, plan_PSF, α, β, jhp::JobHyperParams; xtol_rel = 1e-8, maxeval = 5000, iteration_print = 50, verbose = false)
+# object_init: optional warm start, overriding rechp's own initialize_object -- see
+# reconstruct_Tmap_and_zmap_distributed (forward_distributed.jl) for why.
+function reconstruct_Tmap_and_zmap(noisy_image, fftPSFs, weights, plan_PSF, α, β, jhp::JobHyperParams; iteration_print = 50, verbose = false, object_init = nothing)
     verbose && @info "Starting object reconstruction"
     @unpack php, imghp, rechp = jhp
-    @unpack T_background, z_middle, algorithm = rechp
+    @unpack T_background, z_middle, algorithm, maxeval, xtol_rel, ftol_rel, ftol_abs = rechp
 
     objective_history = Float64[]
-    object_init = initialize_object(imghp, rechp)
+    object_init = object_init === nothing ? initialize_object(imghp, rechp) : object_init
     object_init_flat = flatten_object(object_init)
 
     # see reconstruct_Tmap_and_zmap_distributed (forward_distributed.jl) for why this rescaling is
@@ -477,6 +478,8 @@ function reconstruct_Tmap_and_zmap(noisy_image, fftPSFs, weights, plan_PSF, α, 
     objective_wrapped_lambda = (x, grad) -> nlopt_wrap_objective_autodiff(x, grad, objective_lambda, objective_history; iteration_print = iteration_print, verbose = verbose)
     min_objective!(opt, objective_wrapped_lambda)
     xtol_rel!(opt, xtol_rel)
+    ftol_rel!(opt, ftol_rel)
+    ftol_abs!(opt, ftol_abs)
     maxeval!(opt, maxeval)
 
     (objective_opt, x_opt_scaled, return_value) = NLopt.optimize!(opt, to_scaled(object_init_flat))

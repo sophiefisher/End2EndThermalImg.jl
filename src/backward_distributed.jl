@@ -177,6 +177,36 @@ function Λ_dot_dFdo_distributed(Λ, object, object_opt, geoms, fftPSFs_precompu
     return -(term1 + term2)
 end
 
+# Full gradient of the outer objective w.r.t. [geoms; α; β], for the eventual outer optimization
+# that will jointly optimize geoms alongside the regularization weights (see rechp's α_init/β_init,
+# src/prepare.jl). The geoms block is just Λ_dot_dFdo_distributed, autodiffed through its geoms
+# argument as before. The α/β blocks don't need autodiff: since the inner objective's only α/β-
+# dependence is α*sum((Tmap - T_background)^2) + β*sum((zmap - z_middle)^2), its mixed partials
+# w.r.t. (object_opt, α) and (object_opt, β) are just 2*(T_opt - T_background) and
+# 2*(z_opt - z_middle) respectively (zero cross terms between the T/z blocks), evaluated at
+# object_opt (the same point Λ itself is defined at). Contracting those against the matching block
+# of Λ gives dL/dα, dL/dβ directly via the same adjoint identity used for dL/dgeoms -- no second
+# Hessian solve needed. z_opt's active (bound-pinned) pixels are dropped the same way Λ_z/b_z
+# already are (see get_active_variables / Λ_dot_dFdo_distributed above).
+function outer_gradient_distributed(Λ, object, object_opt, geoms, fftPSFs_precomputed, freqs, weights, plans_PSF, noise, noise_type::AbstractNoiseType, rechp, php, imghp, PSF_scale)
+    ∇geoms = Zygote.gradient(
+        g -> Λ_dot_dFdo_distributed(Λ, object, object_opt, g, fftPSFs_precomputed, freqs, weights, plans_PSF, noise, noise_type, php, imghp, PSF_scale),
+        geoms
+    )[1]
+
+    @unpack T_background, z_middle = rechp
+    _, active_linear_indices = get_active_variables(object_opt.zmap, imghp)
+    free_linear_indices = setdiff(1:imghp.objN^2, active_linear_indices)
+
+    Λ_T = Λ[1:imghp.objN^2]
+    Λ_z = Λ[imghp.objN^2 + 1:end]
+
+    dL_dα = 2 * dot(Λ_T, vec(object_opt.Tmap .- T_background))
+    dL_dβ = 2 * dot(Λ_z, vec(object_opt.zmap .- z_middle)[free_linear_indices])
+
+    return [vec(∇geoms); dL_dα; dL_dβ]
+end
+
 # Distributed analogue of build_hessian_operator (backward.jl). Like Λ_dot_dFdo_distributed,
 # only the per-call Hessian-vector product itself is distributed -- image_diff still comes from
 # a concrete, gathered fftPSFs matrix on the driver, same reason as Λ_dot_dFdo_distributed's own

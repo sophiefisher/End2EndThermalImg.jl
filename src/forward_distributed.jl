@@ -154,21 +154,29 @@ end
 # objective_scale = :auto sets the scale to 10/f0, where f0 is the (unscaled) objective at the
 # initial guess, so NLopt sees an objective that starts at 10. (One extra forward evaluation, no
 # gradient.) A positive number is used as-is. The scale actually used is returned.
-# ftol_rel/ftol_abs default to 0.0 (NLopt's convention for "ignore this criterion") rather than
-# being left unset: when unset, NLopt falls back to its own internal defaults for them, which
-# this function never accounted for -- a plausible explanation (under investigation) for cases
-# where NLopt reported :SUCCESS after only a handful of iterations with object_opt barely moved
-# from object_init, despite objective_scale lifting the gradient well above the documented
-# ~1e-8 absolute floor at that point. With these at 0.0, only xtol_rel, the gradient-norm floor,
-# and maxeval can stop this function, identically across every call.
+# ftol_rel/ftol_abs (rechp fields, like xtol_rel/maxeval) default to 0.0 (NLopt's convention for
+# "ignore this criterion") rather than being left unset: when unset, NLopt falls back to its own
+# internal defaults for them, which this function never accounted for -- a plausible explanation
+# (under investigation) for cases where NLopt reported :SUCCESS after only a handful of iterations
+# with object_opt barely moved from object_init, despite objective_scale lifting the gradient well
+# above the documented ~1e-8 absolute floor at that point. With these at 0.0, only xtol_rel, the
+# gradient-norm floor, and maxeval can stop this function, identically across every call.
+# object_init: optional warm start (an (; Tmap, zmap) object), overriding rechp's own
+# initialize_object(imghp, rechp). Needed for implicit-differentiation-style finite-difference
+# checks across a perturbed α/β (see jupyter_notebooks/2026-10-16-validate-grad-alpha-beta.ipynb):
+# re-initializing from the same generic start at every perturbed α/β can converge to a different
+# local optimum each time (this reconstruction is not convex), so the implicit function theorem's
+# premise -- tracking a single, continuously-varying stationary point -- silently breaks. Warm-
+# starting from a nearby known optimum (e.g. the unperturbed baseline's own object_opt) keeps every
+# trial in the same basin.
 function reconstruct_Tmap_and_zmap_distributed(noisy_image, weights, α, β, jhp::JobHyperParams;
-    xtol_rel = 1e-8, ftol_rel = 0.0, ftol_abs = 0.0, maxeval = 5000, iteration_print = 50, verbose = false, objective_scale = 1.0)
+    iteration_print = 50, verbose = false, objective_scale = 1.0, object_init = nothing)
     verbose && @info "Starting object reconstruction"
     @unpack php, imghp, rechp = jhp
-    @unpack T_background, z_middle, algorithm = rechp
+    @unpack T_background, z_middle, algorithm, maxeval, xtol_rel, ftol_rel, ftol_abs = rechp
 
     objective_history = Float64[]
-    object_init = initialize_object(imghp, rechp)
+    object_init = object_init === nothing ? initialize_object(imghp, rechp) : object_init
     object_init_flat = flatten_object(object_init)
 
     if objective_scale === :auto

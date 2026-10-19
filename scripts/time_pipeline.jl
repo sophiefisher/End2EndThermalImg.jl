@@ -11,10 +11,17 @@ println("driver threads = ", Threads.nthreads())
 println("threads per worker = ", [remotecall_fetch(Threads.nthreads, p) for p in workers()])
 println("driver hostname = ", gethostname())
 println("hostname per worker = ", [remotecall_fetch(gethostname, p) for p in workers()])
+println("PSF_zlen = ", parse(Int, get(ENV, "PSF_ZLEN", "3")))
 
 # Same hyperparameters used throughout jupyter_notebooks/2026-09-23-develop-pipeling.ipynb and
 # jupyter_notebooks/2026-10-14-add-PSF-scale.ipynb, except noise_type = RelativeNoise(0.2) (20%
 # noise relative to the mean image), per this script's own request.
+#
+# PSF_zlen is overridable via the PSF_ZLEN environment variable (set per-submission with
+# `sbatch --export=ALL,PSF_ZLEN=<n> ...`), to compare pipeline timing across different numbers of
+# PSF z-slices without maintaining separate copies of this script.
+@everywhere PSF_zlen = parse(Int, get(ENV, "PSF_ZLEN", "3"))
+
 @everywhere begin
     php = PhysicsHyperParams(
         λlb_μm = 8.0,
@@ -42,7 +49,7 @@ println("hostname per worker = ", [remotecall_fetch(gethostname, p) for p in wor
         sampleN = 1,
         PSF_zlb_μm = -2.1e6,
         PSF_zub_μm = -0.9e6,
-        PSF_zlen = 3,
+        PSF_zlen = PSF_zlen,
         smoothness_order = 3.0,
         object_type = GaussianObject(Tlb = 136.15, Tub = 450.15, std_dev_T = 6.0, zlb_μm = -2.0e6, zub_μm = -1.0e6, std_dev_z = 6.0, php = php),
         noise_type = RelativeNoise(0.2),
@@ -58,6 +65,12 @@ println("hostname per worker = ", [remotecall_fetch(gethostname, p) for p in wor
         T_background = 293.15,
         z_middle_μm = -1.5e6,
         algorithm = :LD_LBFGS,
+        α_init = 1e-7,
+        β_init = 1e-7,
+        maxeval = 2000,
+        xtol_rel = 0.0,
+        ftol_rel = 0.0,
+        ftol_abs = 0.0,
         php = php
     )
 
@@ -69,8 +82,8 @@ println("hostname per worker = ", [remotecall_fetch(gethostname, p) for p in wor
     )
 end
 
-α = 1e-7
-β = 1e-7
+α = rechp.α_init
+β = rechp.β_init
 
 # --- One-time setup, not included in any of the timings below ---
 
@@ -123,8 +136,7 @@ function run_forward_and_backward(geoms, freqs, php, imghp, jhp, object, weights
     println("[$pass_label] make_noisy_image_from_3D_distributed : $(t_noisy_image) s")
 
     t_reconstruct = @elapsed result = End2EndThermalImg.reconstruct_Tmap_and_zmap_distributed(
-        noisy_image, weights, α, β, jhp;
-        maxeval = 2000, xtol_rel = 0, ftol_rel = 0.0, ftol_abs = 0.0, objective_scale = :auto)
+        noisy_image, weights, α, β, jhp; objective_scale = :auto)
     println("[$pass_label] reconstruct_Tmap_and_zmap_distributed: $(t_reconstruct) s",
             "  (return_value=", result.return_value, ", iterations=", length(result.objective_history), ")")
     object_opt = result.object_opt
@@ -165,12 +177,9 @@ function run_forward_and_backward(geoms, freqs, php, imghp, jhp, object, weights
     t_minres = @elapsed Λ, minres_hist = IterativeSolvers.minres!(zeros(N_adjoint), A, b; log = true)
     println("[$pass_label] minres! (adjoint solve)               : $(t_minres) s  (", minres_hist, ")")
 
-    t_grad = @elapsed grad = Zygote.gradient(
-        g -> End2EndThermalImg.Λ_dot_dFdo_distributed(
-            Λ, object, object_opt, g, fftPSFs, freqs, weights, driver_plans_PSF, noise, imghp.noise_type, php, imghp, PSF_scale),
-        geoms
-    )[1]
-    println("[$pass_label] Zygote.gradient(Λ_dot_dFdo_distributed): $(t_grad) s")
+    t_grad = @elapsed grad = End2EndThermalImg.outer_gradient_distributed(
+        Λ, object, object_opt, geoms, fftPSFs, freqs, weights, driver_plans_PSF, noise, imghp.noise_type, jhp.rechp, php, imghp, PSF_scale)
+    println("[$pass_label] outer_gradient_distributed (geoms, α, β): $(t_grad) s")
 
     backward_total = t_gather + t_build_b + t_hessian + t_minres + t_grad
     println("[$pass_label] backward model total                  : $(backward_total) s")

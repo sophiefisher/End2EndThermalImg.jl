@@ -279,6 +279,12 @@ struct ReconstructionHyperParams{FloatType <: AbstractFloat}
     T_background::FloatType
     z_middle_μm::FloatType
     algorithm::Symbol # NLopt algorithm used by reconstruct_Tmap_and_zmap[_distributed], e.g. :LD_LBFGS, :LD_MMA
+    α_init::FloatType # initial regularization weights for the outer optimization (eventually
+    β_init::FloatType # optimized jointly with geoms; used as-is wherever that optimization doesn't exist yet)
+    maxeval::Int # NLopt stopping criteria used by reconstruct_Tmap_and_zmap[_distributed]
+    xtol_rel::FloatType
+    ftol_rel::FloatType
+    ftol_abs::FloatType
 
     # Computed parameters
     z_middle::FloatType
@@ -289,6 +295,12 @@ function ReconstructionHyperParams(;
     T_background::FloatType,
     z_middle_μm::FloatType,
     algorithm::Symbol = :LD_LBFGS,
+    α_init::FloatType,
+    β_init::FloatType,
+    maxeval::Int = 5000,
+    xtol_rel::FloatType = 1e-8,
+    ftol_rel::FloatType = 0.0,
+    ftol_abs::FloatType = 0.0,
     php::PhysicsHyperParams
 ) where {FloatType <: AbstractFloat}
     wavcen = php.wavcen
@@ -299,6 +311,12 @@ function ReconstructionHyperParams(;
         T_background,
         z_middle_μm,
         algorithm,
+        α_init,
+        β_init,
+        maxeval,
+        xtol_rel,
+        ftol_rel,
+        ftol_abs,
         z_middle
     )
 end
