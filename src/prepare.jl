@@ -284,8 +284,10 @@ struct ReconstructionHyperParams{FloatType <: AbstractFloat}
     T_background::FloatType
     z_middle_μm::FloatType
     algorithm::Symbol # NLopt algorithm used by reconstruct_Tmap_and_zmap[_distributed], e.g. :LD_LBFGS, :LD_MMA
-    α_init::FloatType # initial regularization weights for the outer optimization (eventually
-    β_init::FloatType # optimized jointly with geoms; used as-is wherever that optimization doesn't exist yet)
+    α_init::Union{FloatType, Symbol} # initial regularization weights for the outer optimization
+    β_init::Union{FloatType, Symbol} # (eventually optimized jointly with geoms). Either a literal
+                                      # value, or :auto, which resolve_initial_α_β
+                                      # (src/tune_regularization.jl) resolves via its own sweep.
     maxeval::Int # NLopt stopping criteria used by reconstruct_Tmap_and_zmap[_distributed]
     xtol_rel::FloatType
     ftol_rel::FloatType
@@ -300,8 +302,8 @@ function ReconstructionHyperParams(;
     T_background::FloatType,
     z_middle_μm::FloatType,
     algorithm::Symbol = :LD_LBFGS,
-    α_init::FloatType,
-    β_init::FloatType,
+    α_init::Union{FloatType, Symbol},
+    β_init::Union{FloatType, Symbol},
     maxeval::Int = 5000,
     xtol_rel::FloatType = 1e-8,
     ftol_rel::FloatType = 0.0,

@@ -62,6 +62,11 @@ module End2EndThermalImg
     function __init__()
         grcwa[] = pyimport("grcwa")
         numpy[] = pyimport("numpy")
+        # Scales to however many threads this process itself was started with -- never hardcoded,
+        # so this is a no-op (1 thread) on a single-threaded process and uses whatever's actually
+        # available otherwise, on the cluster or a laptop alike. FFTW otherwise defaults to 1
+        # thread regardless of Threads.nthreads().
+        FFTW.set_num_threads(Threads.nthreads())
     end
 
     include("prepare.jl")
@@ -71,6 +76,7 @@ module End2EndThermalImg
     include("backward.jl")
     include("backward_distributed.jl")
     include("optimize.jl")
+    include("tune_regularization.jl")
     include("process.jl")
     include("surrogate.jl")
     include("inversedesign.jl")

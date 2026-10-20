@@ -39,7 +39,7 @@ println("threads per worker = ", [remotecall_fetch(Threads.nthreads, p) for p in
         PSF_zub_μm = -0.9e6,
         PSF_zlen = 3,
         smoothness_order = 3.0,
-        object_type = GaussianObject(Tlb = 136.15, Tub = 450.15, std_dev_T = 6.0, zlb_μm = -2.0e6, zub_μm = -1.0e6, std_dev_z = 6.0, php = php),
+        object_type = UniformlyRandomObject(Tlb = 136.15, Tub = 450.15, zlb_μm = -2.0e6, zub_μm = -1.0e6, zlen = 7, php = php),
         noise_type = RelativeNoise(0.2),
         php = php
     )

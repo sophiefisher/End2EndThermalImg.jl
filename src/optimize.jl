@@ -1,15 +1,22 @@
 function nlopt_wrap_objective_autodiff(params_flat::Vector, grad::Vector, objective, objective_history; iteration_print = 50, verbose = false)
-    obj_val = objective(params_flat)
+    # withgradient, not a separate objective(params_flat) call followed by Zygote.gradient: the
+    # latter runs the forward pass twice per iteration (once directly, once again inside
+    # Zygote.gradient, which rebuilds the forward pass as part of differentiating it).
+    # withgradient gets both from a single combined forward+backward pass; confirmed its (val,
+    # grad) are bit-identical to the old two-call approach.
+    if length(grad) > 0
+        result = Zygote.withgradient(objective, params_flat)
+        obj_val = result.val
+        grad[:] = result.grad[1]
+    else
+        obj_val = objective(params_flat)
+    end
     push!(objective_history, obj_val)
     iteration_count = length(objective_history)
     if verbose
         if iteration_count % iteration_print == 0
             @info "Iteration $iteration_count: objective = $obj_val"
         end
-    end
-
-    if length(grad) > 0
-        grad[:] = Zygote.gradient(x -> objective(x), params_flat)[1]
     end
     obj_val
 end

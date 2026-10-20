@@ -34,7 +34,11 @@ const MONOCHROMATIC_DESIGN_PHP_FIELDS = (
 )
 const MONOCHROMATIC_DESIGN_IMGHP_FIELDS = (:objN, :imgN, :binN, :sampleN, :PSF_zlb_μm, :PSF_zub_μm, :PSF_zlen)
 
-fields_match(a, b, fields) = all(getfield(a, f) == getfield(b, f) for f in fields)
+# getproperty, not getfield: a saved php/imghp whose struct definition has since changed (gained or
+# lost fields) loads back as a JLD2.ReconstructedMutable, a backward-compatible proxy that only
+# supports field access via getproperty/dot-syntax -- getfield fails outright ("has no field ..."),
+# even though the field the type parameter prints is one it was actually saved with.
+fields_match(a, b, fields) = all(getproperty(a, f) == getproperty(b, f) for f in fields)
 
 # Scans inversedesign/ for an existing design_monochromatic_lens run whose saved php/imghp match
 # the current ones on the fields that function actually depends on. Folders are named
@@ -74,7 +78,7 @@ function find_or_design_monochromatic_lens(php, imghp)
 end
 
 # TODO: add verbose option; apply to wrap objective function and @info statements
-function design_monochromatic_lens(php, imghp; geoms_init_type = "uniform", xtol_rel = 1e-8, maxeval = 5000, iteration_print = 50, plot_PSFs = false, log_scale = true, verbose = true, target_objective = 1.0)
+function design_monochromatic_lens(php, imghp; geoms_init_type = "uniform", xtol_rel = 1e-8, maxeval = 500, iteration_print = 50, plot_PSFs = false, log_scale = true, verbose = true, target_objective = 1.0)
     datetime = now()
     verbose && @info "Designing monochromatic lens" datetime=datetime
     root = ensure_inversedesign_folder()
