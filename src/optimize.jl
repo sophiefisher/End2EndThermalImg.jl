@@ -47,8 +47,13 @@ L_reconstruction_error(object, object_opt) =
 # inside a NamedTuple (confirmed empirically -- a gradient supplied for a bare Float64 field is
 # just dropped, not applied, with no error), so wrapping a scalar parameter in a length-1 Vector is
 # the standard workaround.
+# run_folder: if given, checkpoints the current state (same payload save_optimization_state writes
+# for the final save) every opthp.save_every iterations, plus unconditionally on the last iteration
+# regardless of whether it lands on a save_every multiple -- so a cancelled/killed long run never
+# loses more than save_every iterations of progress, and the very latest state is always captured.
+# Left as nothing (no I/O at all) by default, e.g. for quick in-memory use from a notebook.
 function train_outer_optimization_distributed(geoms, α, β, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp::JobHyperParams, PSF_scale;
-    verbose = true)
+    run_folder = nothing, datetime = now(), verbose = true)
     @unpack php, imghp, opthp, rechp = jhp
 
     model = (; geoms = copy(geoms), logα = [log(α)], logβ = [log(β)])
@@ -129,6 +134,12 @@ function train_outer_optimization_distributed(geoms, α, β, freqs, weights, dri
         )
         push!(history, entry)
         verbose && @info "Iteration $iteration" entry.L entry.α entry.β entry.iteration_time entry.reconstruction_return_value entry.reconstruction_iterations entry.minres_converged entry.minres_iterations
+
+        if run_folder !== nothing && (iteration % opthp.save_every == 0 || iteration == opthp.maxeval)
+            save_optimization_state(run_folder, php, imghp, opthp, rechp, PSF_scale,
+                                     model.geoms, exp(model.logα[1]), exp(model.logβ[1]), history, datetime)
+            verbose && @info "Checkpointed at iteration $iteration" run_folder
+        end
     end
 
     (; geoms = model.geoms, α = exp(model.logα[1]), β = exp(model.logβ[1]), history)
@@ -145,28 +156,20 @@ function ensure_optdata_folder()
     return folder
 end
 
-# Runs train_outer_optimization_distributed and saves everything to optdata/opt_<datetime>/:
-# results.jld2 (php/imghp/opthp/rechp/PSF_scale, final geoms_opt_flat/α_opt/β_opt, history,
-# datetime), history.csv (the same history, for inspection outside Julia), and three plots
-# (geoms.png, loss_history.png, alpha_beta_history.png). geoms is saved flattened under the key
-# geoms_opt_flat specifically so a saved run here is interchangeable with design_monochromatic_lens
-# runs (inversedesign/*/results.jld2) via the existing geoms_init_type == "loaded" / load_geoms
-# mechanism (src/inversedesign.jl) -- either kind of saved run can seed either kind of future run.
-function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp::JobHyperParams, PSF_scale;
-    verbose = true)
-    @unpack php, imghp, opthp, rechp = jhp
-    datetime = now()
-    root = ensure_optdata_folder()
-    run_name = "opt_$(datetime)"
-    run_folder = joinpath(root, run_name)
-    mkdir(run_folder)
-
-    out = train_outer_optimization_distributed(geoms, α, β, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp, PSF_scale; verbose = verbose)
-
-    geoms_opt_flat = vec(out.geoms)
-    α_opt = out.α
-    β_opt = out.β
-    history = out.history
+# Writes the full current state to run_folder/results.jld2 (php/imghp/opthp/rechp/PSF_scale,
+# geoms_opt_flat/α_opt/β_opt, history, datetime), run_folder/history.csv (the same history, for
+# inspection outside Julia), and three plots (geoms.png, loss_history.png, alpha_beta_history.png).
+# Called both periodically (checkpointing, from inside train_outer_optimization_distributed's loop)
+# and for the final save -- same payload either way, just overwritten in place each time (not
+# versioned per call), since the goal is "the latest state survives a cancelled job," not a full
+# checkpoint history. geoms is saved flattened under the key geoms_opt_flat specifically so a saved
+# run here is interchangeable with design_monochromatic_lens runs (inversedesign/*/results.jld2)
+# via the existing geoms_init_type == "loaded" / load_geoms mechanism (src/inversedesign.jl) --
+# either kind of saved run can seed either kind of future run.
+function save_optimization_state(run_folder, php, imghp, opthp, rechp, PSF_scale, geoms, α, β, history, datetime)
+    geoms_opt_flat = vec(geoms)
+    α_opt = α
+    β_opt = β
 
     results_file = joinpath(run_folder, "results.jld2")
     @save results_file php imghp opthp rechp PSF_scale geoms_opt_flat α_opt β_opt history datetime
@@ -176,7 +179,26 @@ function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weigh
     plot_objective_function_history([e.L for e in history]; savefile = "$(run_folder)/loss_history.png")
     plot_alpha_beta_history([e.α for e in history], [e.β for e in history]; savefile = "$(run_folder)/alpha_beta_history.png")
 
+    results_file
+end
+
+# Creates optdata/opt_<datetime>/ and runs train_outer_optimization_distributed with checkpointing
+# into it (every opthp.save_every iterations, plus unconditionally on the last one -- see
+# train_outer_optimization_distributed). Since the loop itself guarantees the final iteration is
+# saved, nothing further needs saving here once it returns.
+function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp::JobHyperParams, PSF_scale;
+    verbose = true)
+    root = ensure_optdata_folder()
+    datetime = now()
+    run_name = "opt_$(datetime)"
+    run_folder = joinpath(root, run_name)
+    mkdir(run_folder)
+
+    out = train_outer_optimization_distributed(geoms, α, β, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp, PSF_scale;
+        run_folder = run_folder, datetime = datetime, verbose = verbose)
+
+    results_file = joinpath(run_folder, "results.jld2")
     verbose && @info "Saved results" file=results_file
 
-    (; results_file, run_folder, geoms = out.geoms, α = α_opt, β = β_opt, history)
+    (; results_file, run_folder, geoms = out.geoms, α = out.α, β = out.β, history = out.history)
 end

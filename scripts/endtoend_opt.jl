@@ -47,7 +47,9 @@ println("threads per worker = ", [remotecall_fetch(Threads.nthreads, p) for p in
     opthp = OptimizeHyperParams(
         geoms_init_type = "uniform",
         maxeval = 10,          # outer (geoms, α, β) iterations -- small test run for now
-        learning_rate = 1e-3
+        learning_rate = 1e-3,
+        save_every = 3         # checkpoint interval; smaller than maxeval here so this test run
+                                # actually exercises periodic checkpointing, not just the final save
     )
 
     rechp = ReconstructionHyperParams(

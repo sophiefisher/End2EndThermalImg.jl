@@ -275,6 +275,8 @@ end
     geoms_init_path::String = "" # only used when geoms_init_type == "loaded" (see load_geoms, src/inversedesign.jl)
     maxeval::Int = 1000 # number of outer (geoms, α, β) optimization iterations; the only stopping criterion for now
     learning_rate::Float64 = 1e-3 # Adam learning rate used by train_outer_optimization_distributed (src/optimize.jl)
+    save_every::Int = 10 # checkpoint interval (in outer iterations) for run_and_save_outer_optimization_distributed;
+                         # the last iteration is always saved too, regardless of this value
 end
 
 struct ReconstructionHyperParams{FloatType <: AbstractFloat}
