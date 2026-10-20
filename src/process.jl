@@ -33,6 +33,28 @@ function plot_objective_function_history(objective_history; figsize_x = DEFAULT_
     return fig, ax
 end
 
+function plot_alpha_beta_history(αs, βs; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y, fontsize = DEFAULT_FONTSIZE, savefile = "")
+    matplotlib.rcParams["font.size"] = fontsize
+    fig, axes = subplots(1, 2; figsize=(2 * figsize_x, figsize_y))
+
+    axes[0].plot(1:length(αs), αs, marker="o", color="tab:blue")
+    axes[0].set_xlabel("Iteration")
+    axes[0].set_ylabel("α")
+    axes[0].grid(true, alpha=0.3)
+
+    axes[1].plot(1:length(βs), βs, marker="o", color="tab:orange")
+    axes[1].set_xlabel("Iteration")
+    axes[1].set_ylabel("β")
+    axes[1].grid(true, alpha=0.3)
+
+    fig.tight_layout()
+    if !isempty(savefile)
+        fig.savefig(savefile)
+    end
+    plotclose()
+    return fig, axes
+end
+
 function compute_PSF_grid_dimensions(num_PSFs)
     factors = []
     for i in 1:num_PSFs

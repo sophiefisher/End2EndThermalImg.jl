@@ -43,6 +43,8 @@ module End2EndThermalImg
     using Base.Threads
     using BenchmarkTools
     using LinearMaps
+    using IterativeSolvers
+    using Optimisers
 
     const c = 299792458
     const h = 6.62607015e-34
