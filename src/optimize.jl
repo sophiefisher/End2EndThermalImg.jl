@@ -75,6 +75,12 @@ function train_outer_optimization_distributed(geoms, α, β, freqs, weights, dri
             result = reconstruct_Tmap_and_zmap_distributed(noisy_image, weights, α_cur, β_cur, jhp; objective_scale = :auto)
             object_opt = result.object_opt
 
+            # TEMPORARY diagnostic: checking whether object_opt.Tmap is being driven toward ~0
+            # Kelvin (where dB_dT/d2B_dT2's exp(A·freq/T) overflows -- the suspected trigger for the
+            # NaN seen in Λ). Tagged with `iteration` explicitly so it's unambiguous which
+            # iteration's reconstruction this is reporting on. Remove once confirmed (or refuted).
+            verbose && @info "  [diagnostic, iteration $iteration] object_opt.Tmap" extrema_Tmap=extrema(object_opt.Tmap) T_background=rechp.T_background
+
             fftPSFs = let
                 fftPSFs = Matrix{Matrix{ComplexF64}}(undef, length(freqs), length(PSF_zcoords))
                 for p in workers()
