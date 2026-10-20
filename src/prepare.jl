@@ -340,8 +340,15 @@ function get_wavcen(λlb_μm, λub_μm)
     wavcen
 end
 
-function initialize_geoms(php::PhysicsHyperParams, opthp::OptimizeHyperParams)
+# imghp: only required when opthp.geoms_init_type == "monochromatic" -- kept as an optional
+# keyword (not a required positional argument) so every existing call site (which never uses that
+# mode) keeps working unchanged.
+function initialize_geoms(php::PhysicsHyperParams, opthp::OptimizeHyperParams; imghp = nothing)
     opthp.geoms_init_type == "loaded" && return load_geoms(php, opthp.geoms_init_path)
+    if opthp.geoms_init_type == "monochromatic"
+        imghp === nothing && error("initialize_geoms: geoms_init_type == \"monochromatic\" requires imghp (pass it as a keyword argument)")
+        return find_or_design_monochromatic_lens(php, imghp)
+    end
     initialize_geoms(php, opthp.geoms_init_type)
 end
 

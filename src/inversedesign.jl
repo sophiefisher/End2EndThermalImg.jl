@@ -21,6 +21,58 @@ function load_geoms(php::PhysicsHyperParams, path::String)
     geoms
 end
 
+# The php/imghp fields design_monochromatic_lens actually depends on (traced through its full call
+# chain: surrogate loading/filename, frequency and PSF-depth grids, PSF pixel binning, NLopt
+# bounds) -- everything else (e.g. imghp.noise_type/object_type/smoothness_order,
+# php.substrate_height_μm, opthp entirely) can differ without invalidating a cached design. Only
+# the raw/user-facing fields are listed; php/imghp's "computed" fields (wavcen, pillar_width_lb,
+# PSF_zlb, etc.) are deterministic functions of these, so comparing the raw ones is sufficient.
+const MONOCHROMATIC_DESIGN_PHP_FIELDS = (
+    :λlb_μm, :λub_μm, :freq_order, :focal_length_μm, :num_unit_cells, :unit_cell_length_μm,
+    :pillar_width_lb_μm, :pillar_width_ub_μm, :pillar_width_order, :pillar_height_μm,
+    :pillar_material, :substrate_material, :nG
+)
+const MONOCHROMATIC_DESIGN_IMGHP_FIELDS = (:objN, :imgN, :binN, :sampleN, :PSF_zlb_μm, :PSF_zub_μm, :PSF_zlen)
+
+fields_match(a, b, fields) = all(getfield(a, f) == getfield(b, f) for f in fields)
+
+# Scans inversedesign/ for an existing design_monochromatic_lens run whose saved php/imghp match
+# the current ones on the fields that function actually depends on. Folders are named
+# monochromatic_lens_<datetime>, so sorting the names descending gives most-recent-first; returns
+# the first (i.e. most recent) match, or nothing if there isn't one. Anything that isn't a
+# results.jld2-containing folder with saved php/imghp (there's currently nothing else under
+# inversedesign/, but just in case) is skipped rather than erroring.
+function find_matching_monochromatic_design(php, imghp)
+    root = ensure_inversedesign_folder()
+    for run_name in sort(readdir(root); rev = true)
+        run_folder = joinpath(root, run_name)
+        results_file = joinpath(run_folder, "results.jld2")
+        isfile(results_file) || continue
+        saved = JLD2.load(results_file)
+        haskey(saved, "php") && haskey(saved, "imghp") || continue
+        if fields_match(php, saved["php"], MONOCHROMATIC_DESIGN_PHP_FIELDS) &&
+           fields_match(imghp, saved["imghp"], MONOCHROMATIC_DESIGN_IMGHP_FIELDS)
+            return run_folder
+        end
+    end
+    nothing
+end
+
+# geoms_init_type == "monochromatic": reuses an existing design_monochromatic_lens run that matches
+# (see find_matching_monochromatic_design), or designs and saves a fresh one (with
+# design_monochromatic_lens's own defaults) if there isn't one yet -- a self-populating cache under
+# inversedesign/, shared across any job that initializes this way.
+function find_or_design_monochromatic_lens(php, imghp)
+    match = find_matching_monochromatic_design(php, imghp)
+    if match !== nothing
+        @info "Reusing existing monochromatic lens design" run_folder=match
+        return load_geoms(php, match)
+    end
+    @info "No matching monochromatic lens design found; designing a new one"
+    out = design_monochromatic_lens(php, imghp)
+    unflatten_square_matrix(out.geoms_opt_flat)
+end
+
 # TODO: add verbose option; apply to wrap objective function and @info statements
 function design_monochromatic_lens(php, imghp; geoms_init_type = "uniform", xtol_rel = 1e-8, maxeval = 5000, iteration_print = 50, plot_PSFs = false, log_scale = true, verbose = true, target_objective = 1.0)
     datetime = now()
