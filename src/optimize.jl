@@ -95,8 +95,18 @@ function train_outer_optimization_distributed(geoms, α, β, freqs, weights, dri
                                                      noise, imghp.noise_type, α_cur, β_cur, php, imghp)
             Λ, minres_hist = IterativeSolvers.minres!(zeros(N_adjoint), A, b; log = true)
 
+            # TEMPORARY diagnostic: checking whether a non-converged minres! solve actually produces
+            # a non-finite (or merely huge) Λ, which would then explain the NaN seen propagating into
+            # geoms/α/β via Optimisers.update! on a later iteration. Remove once that's confirmed
+            # (or refuted) and a real fix is in place.
+            verbose && @info "  [diagnostic] Λ" norm_Λ=norm(Λ) extrema_Λ=extrema(Λ) any_nonfinite_Λ=any(!isfinite, Λ)
+
             grad_full = outer_gradient_distributed(Λ, object, object_opt, model.geoms, fftPSFs, freqs, weights, driver_plans_PSF,
                                                      noise, imghp.noise_type, rechp, php, imghp, PSF_scale)
+
+            # TEMPORARY diagnostic: see above.
+            verbose && @info "  [diagnostic] grad_full" norm_grad=norm(grad_full) extrema_grad=extrema(grad_full) any_nonfinite_grad=any(!isfinite, grad_full)
+
             dL_dα, dL_dβ = grad_full[end - 1], grad_full[end]
             grads = (; geoms = reshape(grad_full[1:end - 2], size(model.geoms)), logα = [dL_dα * α_cur], logβ = [dL_dβ * β_cur])
 
@@ -109,8 +119,8 @@ function train_outer_optimization_distributed(geoms, α, β, freqs, weights, dri
         entry = (;
             iteration,
             L,
-            α = exp(model.logα[1]),
-            β = exp(model.logβ[1]),
+            α = α_cur,
+            β = β_cur,
             iteration_time,
             reconstruction_return_value = result.return_value,
             reconstruction_iterations = length(result.objective_history),
