@@ -205,7 +205,7 @@ function reconstruct_Tmap_and_zmap_distributed(noisy_image, weights, α, β, jhp
     to_physical(x_scaled) = x_scaled .* scale_vec
 
     opt = Opt(algorithm, 2 * imghp.objN^2)
-    lower_bounds!(opt, to_scaled([fill(eps(), imghp.objN^2); fill(imghp.PSF_zlb, imghp.objN^2)]))
+    lower_bounds!(opt, to_scaled([fill(T_LOWER_BOUND, imghp.objN^2); fill(imghp.PSF_zlb, imghp.objN^2)]))
     upper_bounds!(opt, to_scaled([fill(Inf, imghp.objN^2); fill(imghp.PSF_zub, imghp.objN^2)]))
     objective_lambda = x_scaled -> objective_scale * reconstruction_objective_distributed(to_physical(x_scaled), noisy_image, weights, α, β, T_background, z_middle, php, imghp)
     objective_wrapped_lambda = (x, grad) -> nlopt_wrap_objective_autodiff(x, grad, objective_lambda, objective_history; iteration_print = iteration_print, verbose = verbose)

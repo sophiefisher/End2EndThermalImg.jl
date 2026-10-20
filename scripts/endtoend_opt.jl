@@ -45,7 +45,7 @@ println("threads per worker = ", [remotecall_fetch(Threads.nthreads, p) for p in
     )
 
     opthp = OptimizeHyperParams(
-        geoms_init_type = "uniform",
+        geoms_init_type = "monochromatic",
         maxeval = 10,          # outer (geoms, α, β) iterations -- small test run for now
         learning_rate = 1e-3,
         save_every = 3         # checkpoint interval; smaller than maxeval here so this test run
@@ -82,10 +82,16 @@ println("\n--- setup ---")
 
 @everywhere begin
     surrogates = End2EndThermalImg.load_surrogate_models(php)
-    geoms = End2EndThermalImg.initialize_geoms(php, opthp)
     PSF_zcoords = End2EndThermalImg.get_PSF_zcoords(imghp)
     weights = End2EndThermalImg.get_clenshaw_curtis_quadrature_weights(php)
 end
+
+# Driver-only (not @everywhere): nothing in the package reads a worker's own resident `geoms` --
+# it's always passed as an explicit argument (update_geoms_and_fftPSFs! below sends it to workers
+# itself). This matters more than it used to: with geoms_init_type == "monochromatic", running
+# this on every worker would mean several processes concurrently hitting inversedesign/ (redundant
+# design_monochromatic_lens runs on a cache miss, racing mkdir/@save calls on a cache hit).
+geoms = End2EndThermalImg.initialize_geoms(php, opthp; imghp = imghp)
 
 @time End2EndThermalImg.assign_shard_indices!()
 @time End2EndThermalImg.init_resident_incidents!(freqs, PSF_zcoords, php)

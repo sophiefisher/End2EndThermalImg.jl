@@ -49,6 +49,13 @@ module End2EndThermalImg
     const c = 299792458
     const h = 6.62607015e-34
     const kB = 1.380649e-23
+    # Lower bound on T (Kelvin) in reconstruct_Tmap_and_zmap[_distributed]'s NLopt optimization.
+    # eps() (~2.22e-16) overflows dB_dT/d2B_dT2's exp(A*freq/T) term (Inf/Inf = NaN) at the
+    # wavelengths this package models; confirmed numerically that 3.0 K is safely finite there
+    # (though the gradient itself has already underflowed to exactly 0 by that point -- a pixel
+    # pinned at this bound still isn't a trustworthy free variable, see T_LOWER_BOUND's use in
+    # train_outer_optimization_distributed, src/optimize.jl).
+    const T_LOWER_BOUND = 3.0
     const grcwa = Ref{Py}()
     const numpy = Ref{Py}()
     
