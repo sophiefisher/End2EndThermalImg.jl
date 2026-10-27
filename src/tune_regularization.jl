@@ -144,5 +144,41 @@ function resolve_initial_α_β(rechp, geoms, freqs, weights, driver_plans_PSF, P
     # object_opt from inside the loop above isn't guaranteed to correspond exactly to x_opt.
     r_final = reconstruction_error_and_grad(object, noise, α_resolved, β_resolved, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp)
 
-    (; α = α_resolved, β = β_resolved, history, return_value, object, noise, object_opt = r_final.object_opt)
+    (; α = α_resolved, β = β_resolved, history, return_value, object, noise, object_opt = r_final.object_opt,
+       n_active_T = r_final.n_active_T, n_active_z = r_final.n_active_z)
+end
+
+# Saves resolve_initial_α_β's output into run_folder/tune_regularization/ -- a subfolder of the
+# same optdata/opt_<datetime>/ run_and_save_outer_optimization_distributed (src/optimize.jl) uses
+# for the main optimization, so everything from one cluster job lands together. Mirrors
+# save_optimization_state's pattern (results.jld2 + history.csv + plots), plus two reconstruction
+# plots: at the search's starting point (α_start, β_start) and at the resolved (α, β) --
+# re-evaluating the former explicitly, the same way jupyter_notebooks/2026-10-23-tune-
+# regularization.ipynb's two reconstruction sections do, since resolve_initial_α_β's own return
+# value only carries the resolved reconstruction.
+function save_tune_regularization_state(run_folder, tune_out, α_start, β_start, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp, PSF_scale)
+    @unpack php, imghp, rechp = jhp
+    @unpack α, β, history, return_value, object, noise, object_opt, n_active_T, n_active_z = tune_out
+
+    tune_folder = joinpath(run_folder, "tune_regularization")
+    mkdir(tune_folder)
+
+    results_file = joinpath(tune_folder, "results.jld2")
+    @save results_file php imghp rechp PSF_scale α β α_start β_start history return_value object noise object_opt n_active_T n_active_z
+    CSV.write(joinpath(tune_folder, "history.csv"), DataFrame(history))
+
+    plot_alpha_beta_history([h.α for h in history], [h.β for h in history];
+        log_scale = true, savefile = "$(tune_folder)/alpha_beta_history.png")
+    plot_objective_function_history([h.L for h in history]; savefile = "$(tune_folder)/loss_history.png")
+
+    r_init = reconstruction_error_and_grad(object, noise, α_start, β_start, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp)
+    plot_reconstruction_results(object, r_init.object_opt;
+        extra_title = "α = $α_start, β = $β_start  (initial, before tuning).  n_active_T=$(r_init.n_active_T), n_active_z=$(r_init.n_active_z)",
+        savefile = "$(tune_folder)/reconstruction_initial.png")
+
+    plot_reconstruction_results(object, object_opt;
+        extra_title = "α = $α, β = $β  (resolved).  n_active_T=$n_active_T, n_active_z=$n_active_z",
+        savefile = "$(tune_folder)/reconstruction_resolved.png")
+
+    results_file
 end

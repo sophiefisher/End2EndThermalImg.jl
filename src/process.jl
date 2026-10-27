@@ -33,19 +33,28 @@ function plot_objective_function_history(objective_history; figsize_x = DEFAULT_
     return fig, ax
 end
 
-function plot_alpha_beta_history(αs, βs; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y, fontsize = DEFAULT_FONTSIZE, savefile = "")
+function plot_alpha_beta_history(αs, βs; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y, fontsize = DEFAULT_FONTSIZE, log_scale = false, savefile = "")
     matplotlib.rcParams["font.size"] = fontsize
     fig, axes = subplots(1, 2; figsize=(2 * figsize_x, figsize_y))
 
-    axes[0].plot(1:length(αs), αs, marker="o", color="tab:blue")
+    # log_scale: α/β can span many orders of magnitude within a single history (e.g. a
+    # resolve_initial_α_β search sweeping 1e-7 to 1e-5 and beyond) -- linear axes would be close
+    # to unreadable there. Defaults to false so train_outer_optimization_distributed's own, more
+    # gradually-changing Adam-driven history keeps its existing linear appearance.
+    if log_scale
+        axes[0].semilogy(1:length(αs), αs, marker="o", color="tab:blue")
+        axes[1].semilogy(1:length(βs), βs, marker="o", color="tab:orange")
+    else
+        axes[0].plot(1:length(αs), αs, marker="o", color="tab:blue")
+        axes[1].plot(1:length(βs), βs, marker="o", color="tab:orange")
+    end
     axes[0].set_xlabel("Iteration")
     axes[0].set_ylabel("α")
-    axes[0].grid(true, alpha=0.3)
+    axes[0].grid(true, which = log_scale ? "both" : "major", alpha=0.3)
 
-    axes[1].plot(1:length(βs), βs, marker="o", color="tab:orange")
     axes[1].set_xlabel("Iteration")
     axes[1].set_ylabel("β")
-    axes[1].grid(true, alpha=0.3)
+    axes[1].grid(true, which = log_scale ? "both" : "major", alpha=0.3)
 
     fig.tight_layout()
     if !isempty(savefile)
@@ -145,11 +154,12 @@ function plot_reconstruction_results(object, object_opt;
                                      figsize_x = DEFAULT_FIGSIZE_X,
                                      figsize_y = DEFAULT_FIGSIZE_Y,
                                      fontsize = 10,
-                                     extra_title = "")
+                                     extra_title = "",
+                                     savefile = "")
 
     matplotlib.rcParams["font.size"] = fontsize
     fig, ax = subplots(2, 3, figsize=(3*figsize_x, 2*figsize_y))
-    
+
     Tmin = minimum(object.Tmap)
     Tmax = maximum(object.Tmap)
     zmin = minimum(object.zmap)
@@ -175,30 +185,36 @@ function plot_reconstruction_results(object, object_opt;
     fig.colorbar(im11, ax=ax[1,1], label="z (unitless)")
     image_axis!(ax[1,1])
 
-    im02 = ax[0,2].imshow((object.Tmap .- object_opt.Tmap).^2 ./ object.Tmap.^2, cmap = ColorMap(colorschemes[:grays].colors))
-    ax[0,2].set_title(L"Relative square error $\frac{(T_i - T_{est_i})^2}{T_i^2}$")
-    fig.colorbar(im02, ax=ax[0,2])
+    # per-pixel signed relative error, as a percentage of the true value at that pixel -- safe
+    # here since neither Tmap nor zmap ever approaches zero (both are generated with lb/ub bounds
+    # bracketed away from 0; see e.g. UniformlyRandomObject/GaussianObject, src/prepare.jl).
+    error_T = 100 .* (object_opt.Tmap .- object.Tmap) ./ object.Tmap
+    error_z = 100 .* (object_opt.zmap .- object.zmap) ./ object.zmap
+
+    # relative L2 error -- ||opt - true|| / ||true||, one shared scalar per map (not a pointwise
+    # ratio at each pixel like error_T/error_z above). relerr_T^2 + relerr_z^2 is exactly
+    # L_reconstruction_error (src/optimize.jl) -- the actual scalar the reconstruction and the
+    # outer bilevel objective are built around.
+    relerr_T = norm(object_opt.Tmap .- object.Tmap) / norm(object.Tmap)
+    relerr_z = norm(object_opt.zmap .- object.zmap) / norm(object.zmap)
+
+    elim_T = maximum(abs, error_T)
+    im02 = ax[0,2].imshow(error_T, cmap = "RdBu", vmin = -elim_T, vmax = elim_T)
+    ax[0,2].set_title("per-pixel relative error (%)\nrelative L2 error: $(round(100*relerr_T, digits=2))%")
+    fig.colorbar(im02, ax=ax[0,2], label="%")
     image_axis!(ax[0,2])
 
-    im12 = ax[1,2].imshow((object.zmap .- object_opt.zmap).^2 ./ object.zmap.^2, cmap = ColorMap(colorschemes[:grays].colors))
-    ax[1,2].set_title(L"Relative square error $\frac{(z_i - z_{est_i})^2}{z_i^2}$")
-    fig.colorbar(im12, ax=ax[1,2])
+    elim_z = maximum(abs, error_z)
+    im12 = ax[1,2].imshow(error_z, cmap = "RdBu", vmin = -elim_z, vmax = elim_z)
+    ax[1,2].set_title("per-pixel relative error (%)\nrelative L2 error: $(round(100*relerr_z, digits=2))%")
+    fig.colorbar(im12, ax=ax[1,2], label="%")
     image_axis!(ax[1,2])
-
-    MSE_T = sum((object.Tmap .- object_opt.Tmap).^2) / sum(object.Tmap.^2)
-    MSE_z = sum((object.zmap .- object_opt.zmap).^2) / sum(object.zmap.^2)
-
-    ax[0,2].text(1.6, 0.5, "Relative MSE \n = $(round(MSE_T, digits=4)) \n \n Relative RMSE \n = $(round(sqrt(MSE_T)*100, digits=4))%",
-                 transform = ax[0,2].transAxes,
-                 va = "center", ha = "left", fontsize = fontsize)
-
-    ax[1,2].text(1.6, 0.5, "Relative MSE \n = $(round(MSE_z, digits=4)) \n \n Relative RMSE \n = $(round(sqrt(MSE_z)*100, digits=4))%",
-
-                 transform = ax[1,2].transAxes,
-                 va = "center", ha = "left", fontsize = fontsize)
 
     fig.text(0.5, 1.05, "$(extra_title)", ha="center", va="top", transform=fig.transFigure, fontsize = fontsize + 2)
     fig.tight_layout()
+    if !isempty(savefile)
+        fig.savefig(savefile, bbox_inches="tight")
+    end
     plotclose()
     return fig, ax
 end
