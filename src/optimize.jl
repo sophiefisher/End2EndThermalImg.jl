@@ -69,7 +69,7 @@ function train_outer_optimization_distributed(geoms, α, β, freqs, weights, dri
     history = NamedTuple[]
 
     for iteration in 1:opthp.maxeval
-        local object, object_opt, result, minres_hist, L, α_cur, β_cur, T_pinned
+        local object, object_opt, result, minres_hist, L, α_cur, β_cur, n_active_T, n_active_z
         iteration_time = @elapsed begin
             object = get_object(imghp)
             noise = generate_noise(imghp)
@@ -82,29 +82,18 @@ function train_outer_optimization_distributed(geoms, α, β, freqs, weights, dri
             result = reconstruct_Tmap_and_zmap_distributed(noisy_image, weights, α_cur, β_cur, jhp; objective_scale = :auto)
             object_opt = result.object_opt
 
-            # TEMPORARY diagnostic: checking whether object_opt.Tmap is being driven toward ~0
-            # Kelvin (where dB_dT/d2B_dT2's exp(A·freq/T) overflows -- the suspected trigger for the
-            # NaN seen in Λ). Tagged with `iteration` explicitly so it's unambiguous which
-            # iteration's reconstruction this is reporting on. Remove once confirmed (or refuted).
-            verbose && @info "  [diagnostic, iteration $iteration] object_opt.Tmap" extrema_Tmap=extrema(object_opt.Tmap) T_background=rechp.T_background
+            idx = get_free_and_active_indices(object_opt, imghp)
+            free_T, free_z = idx.free_T, idx.free_z
+            n_active_T, n_active_z = length(idx.active_T), length(idx.active_z)
+            N_adjoint = length(free_T) + length(free_z)
 
-            # Staged safety net (full write-up in the git history/conversation, not reproduced
-            # here): T has no active-variable (bound-pinned) treatment anywhere in this package's
-            # adjoint/Hessian machinery -- b_T, Λ_T, and dL_dα all unconditionally assume every
-            # T-pixel is free. If T is pinned at T_LOWER_BOUND, that machinery would silently
-            # produce a mathematically wrong (not merely inaccurate) gradient: Hv_TT still adds 2α
-            # to that pixel's diagonal regardless of whether it can actually move. Rather than
-            # building out the full active-set treatment (the analogue of get_active_variables/
-            # free_linear_indices already in place for z, touching build_hessian_operator[_distributed],
-            # Λ_dot_dFdo[_distributed], and outer_gradient_distributed) before it's shown to be
-            # necessary, this just detects the condition and skips the update for this iteration
-            # entirely -- geoms/α/β are left unchanged, and the expensive Hessian/minres!/gradient
-            # steps are skipped too, since their result would be discarded anyway.
-            T_pinned = any(==(T_LOWER_BOUND), object_opt.Tmap)
             minres_hist = nothing
-
-            if T_pinned
-                @warn "T pinned at its lower bound ($(T_LOWER_BOUND) K) on iteration $iteration -- skipping this iteration's update (geoms/α/β left unchanged)" n_pinned=count(==(T_LOWER_BOUND), object_opt.Tmap)
+            if N_adjoint == 0
+                # Every T and z pixel pinned at its bound -- nothing is left as a free
+                # reconstruction variable, so there's no adjoint equation to solve and the
+                # geoms/α/β sensitivity is undefined. Skip this iteration's update entirely
+                # (geoms/α/β left unchanged) rather than solving a degenerate 0x0 system.
+                @warn "Every T and z pixel pinned at its bound on iteration $iteration -- skipping this iteration's update (geoms/α/β left unchanged)"
             else
                 fftPSFs = let
                     fftPSFs = Matrix{Matrix{ComplexF64}}(undef, length(freqs), length(PSF_zcoords))
@@ -120,28 +109,16 @@ function train_outer_optimization_distributed(geoms, α, β, freqs, weights, dri
                     fftPSFs
                 end
 
-                _, active_linear_indices = get_active_variables(object_opt.zmap, imghp)
-                free_linear_indices = setdiff(1:imghp.objN^2, active_linear_indices)
-                b_T = vec(2 .* (object.Tmap .- object_opt.Tmap) ./ sum(abs2, object.Tmap))
-                b_z = vec(2 .* (object.zmap .- object_opt.zmap) ./ sum(abs2, object.zmap))[free_linear_indices]
+                b_T = vec(2 .* (object.Tmap .- object_opt.Tmap) ./ sum(abs2, object.Tmap))[free_T]
+                b_z = vec(2 .* (object.zmap .- object_opt.zmap) ./ sum(abs2, object.zmap))[free_z]
                 b = [b_T; b_z]
-                N_adjoint = 2 * imghp.objN^2 - length(active_linear_indices)
 
                 A = build_hessian_operator_distributed(object, object_opt, fftPSFs, freqs, weights, driver_plans_PSF,
                                                          noise, imghp.noise_type, α_cur, β_cur, php, imghp)
                 Λ, minres_hist = IterativeSolvers.minres!(zeros(N_adjoint), A, b; log = true)
 
-                # TEMPORARY diagnostic: checking whether a non-converged minres! solve actually
-                # produces a non-finite (or merely huge) Λ, which would then explain the NaN seen
-                # propagating into geoms/α/β via Optimisers.update! on a later iteration. Remove
-                # once that's confirmed (or refuted) and a real fix is in place.
-                verbose && @info "  [diagnostic] Λ" norm_Λ=norm(Λ) extrema_Λ=extrema(Λ) any_nonfinite_Λ=any(!isfinite, Λ)
-
                 grad_full = outer_gradient_distributed(Λ, object, object_opt, model.geoms, fftPSFs, freqs, weights, driver_plans_PSF,
                                                          noise, imghp.noise_type, rechp, php, imghp, PSF_scale)
-
-                # TEMPORARY diagnostic: see above.
-                verbose && @info "  [diagnostic] grad_full" norm_grad=norm(grad_full) extrema_grad=extrema(grad_full) any_nonfinite_grad=any(!isfinite, grad_full)
 
                 dL_dα, dL_dβ = grad_full[end - 1], grad_full[end]
                 grads = (; geoms = reshape(grad_full[1:end - 2], size(model.geoms)), logα = [dL_dα * α_cur], logβ = [dL_dβ * β_cur])
@@ -161,12 +138,13 @@ function train_outer_optimization_distributed(geoms, α, β, freqs, weights, dri
             iteration_time,
             reconstruction_return_value = result.return_value,
             reconstruction_iterations = length(result.objective_history),
-            minres_converged = T_pinned ? missing : minres_hist.isconverged,
-            minres_iterations = T_pinned ? missing : minres_hist.iters,
-            T_pinned
+            minres_converged = minres_hist === nothing ? missing : minres_hist.isconverged,
+            minres_iterations = minres_hist === nothing ? missing : minres_hist.iters,
+            n_active_T,
+            n_active_z
         )
         push!(history, entry)
-        verbose && @info "Iteration $iteration" entry.L entry.α entry.β entry.iteration_time entry.reconstruction_return_value entry.reconstruction_iterations entry.minres_converged entry.minres_iterations entry.T_pinned
+        verbose && @info "Iteration $iteration" entry.L entry.α entry.β entry.iteration_time entry.reconstruction_return_value entry.reconstruction_iterations entry.minres_converged entry.minres_iterations entry.n_active_T entry.n_active_z
 
         if run_folder !== nothing && (iteration % opthp.save_every == 0 || iteration == opthp.maxeval)
             save_optimization_state(run_folder, php, imghp, opthp, rechp, PSF_scale,

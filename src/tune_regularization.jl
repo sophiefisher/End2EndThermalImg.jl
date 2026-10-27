@@ -8,18 +8,33 @@
 # the caller (resolve_initial_α_β) does that once, up front, since fftPSFs don't depend on α/β at
 # all and recomputing them on every candidate would be pure waste.
 #
-# No special-casing for T pinning at T_LOWER_BOUND here, unlike train_outer_optimization_distributed:
-# confirmed numerically (see the conversation that led to this file) that both dB_dT and d2B_dT2
-# stay finite at T_LOWER_BOUND (3.0 K) and well below it, so the Hessian/minres!/gradient chain
-# can't produce NaN/Inf here the way it could with the old eps() bound. A candidate (α, β) bad
-# enough to pin T just gets a correspondingly bad (but finite) L and gradient -- exactly the signal
-# that should steer the search away from it, with no special handling needed.
+# T pinning at T_LOWER_BOUND is handled the same way as everywhere else now (get_free_and_active_
+# indices, backward.jl), not specially -- a candidate (α, β) bad enough to pin T just gets a
+# correspondingly bad (but finite and correct) L and gradient, exactly the signal that should
+# steer the search away from it. The one genuinely degenerate case (every T and z pixel pinned,
+# N_adjoint == 0) is guarded explicitly below, since that candidate is more plausible here than in
+# train_outer_optimization_distributed: this search deliberately sweeps α/β across many orders of
+# magnitude in log-space, including extreme values unlikely to arise from Adam's smaller steps.
 function reconstruction_error_and_grad(object, noise, α, β, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp)
     @unpack php, imghp, rechp = jhp
 
     noisy_image = make_noisy_image_from_3D_distributed(object, weights, noise, imghp.noise_type, php, imghp)
     result = reconstruct_Tmap_and_zmap_distributed(noisy_image, weights, α, β, jhp; objective_scale = :auto)
     object_opt = result.object_opt
+
+    idx = get_free_and_active_indices(object_opt, imghp)
+    free_T, free_z = idx.free_T, idx.free_z
+    n_active_T, n_active_z = length(idx.active_T), length(idx.active_z)
+    N_adjoint = length(free_T) + length(free_z)
+    L = L_reconstruction_error(object, object_opt)
+
+    if N_adjoint == 0
+        # Nothing is a free reconstruction variable left for α/β to influence -- no adjoint
+        # equation to solve, so report zero sensitivity rather than attempting a degenerate 0x0
+        # minres! solve (same reasoning as optimize.jl's own N_adjoint == 0 guard).
+        @warn "Every T and z pixel pinned at its bound for (α, β) = ($α, $β) -- reporting zero dL_dα/dL_dβ" n_active_T n_active_z
+        return (; L, dL_dα = 0.0, dL_dβ = 0.0, object_opt, result, minres_hist = nothing, n_active_T, n_active_z)
+    end
 
     fftPSFs = let
         fftPSFs = Matrix{Matrix{ComplexF64}}(undef, length(freqs), length(PSF_zcoords))
@@ -32,27 +47,33 @@ function reconstruction_error_and_grad(object, noise, α, β, freqs, weights, dr
                 fftPSFs[iF, iZ] = shard[(iF, iZ)]
             end
         end
+        # If a worker died since assign_shard_indices! last partitioned the (freq, z) grid across
+        # workers(), that worker's slice is permanently missing from every future gather (its
+        # grid_inds are no longer reachable through any live worker) -- fail loudly here, with
+        # which cells are missing, rather than a cryptic UndefRefError deep inside
+        # build_hessian_operator_distributed/make_image_from_3D.
+        missing_cells = [(iF, iZ) for iF in axes(fftPSFs, 1), iZ in axes(fftPSFs, 2) if !isassigned(fftPSFs, iF, iZ)]
+        isempty(missing_cells) || error("fftPSFs gather is missing $(length(missing_cells)) (freq, z) cells " *
+            "(e.g. $(first(missing_cells))) -- a worker likely died since assign_shard_indices! was last called; " *
+            "restart cluster workers and re-run setup (assign_shard_indices!/init_resident_incidents!/" *
+            "update_geoms_and_fftPSFs!) before retrying. workers() = $(workers())")
         fftPSFs
     end
 
-    _, active_linear_indices = get_active_variables(object_opt.zmap, imghp)
-    free_linear_indices = setdiff(1:imghp.objN^2, active_linear_indices)
-    b_T = vec(2 .* (object.Tmap .- object_opt.Tmap) ./ sum(abs2, object.Tmap))
-    b_z = vec(2 .* (object.zmap .- object_opt.zmap) ./ sum(abs2, object.zmap))[free_linear_indices]
+    b_T = vec(2 .* (object.Tmap .- object_opt.Tmap) ./ sum(abs2, object.Tmap))[free_T]
+    b_z = vec(2 .* (object.zmap .- object_opt.zmap) ./ sum(abs2, object.zmap))[free_z]
     b = [b_T; b_z]
-    N_adjoint = 2 * imghp.objN^2 - length(active_linear_indices)
 
     A = build_hessian_operator_distributed(object, object_opt, fftPSFs, freqs, weights, driver_plans_PSF,
                                              noise, imghp.noise_type, α, β, php, imghp)
     Λ, minres_hist = IterativeSolvers.minres!(zeros(N_adjoint), A, b; log = true)
 
-    Λ_T = Λ[1:imghp.objN^2]
-    Λ_z = Λ[imghp.objN^2 + 1:end]
-    dL_dα = 2 * dot(Λ_T, vec(object_opt.Tmap .- rechp.T_background))
-    dL_dβ = 2 * dot(Λ_z, vec(object_opt.zmap .- rechp.z_middle)[free_linear_indices])
+    Λ_T = Λ[1:length(free_T)]
+    Λ_z = Λ[length(free_T) + 1:end]
+    dL_dα = 2 * dot(Λ_T, vec(object_opt.Tmap .- rechp.T_background)[free_T])
+    dL_dβ = 2 * dot(Λ_z, vec(object_opt.zmap .- rechp.z_middle)[free_z])
 
-    L = L_reconstruction_error(object, object_opt)
-    (; L, dL_dα, dL_dβ, object_opt, result, minres_hist)
+    (; L, dL_dα, dL_dβ, object_opt, result, minres_hist, n_active_T, n_active_z)
 end
 
 # Resolves rechp.α_init/β_init: returns them unchanged if neither is :auto (no sweep at all), and
@@ -102,8 +123,9 @@ function resolve_initial_α_β(rechp, geoms, freqs, weights, driver_plans_PSF, P
         end
         push!(history, (; iteration = length(history) + 1, α, β, L = r.L,
                          reconstruction_return_value = r.result.return_value,
-                         minres_converged = r.minres_hist.isconverged))
-        verbose && @info "resolve_initial_α_β iteration $(length(history))" α β L=r.L
+                         minres_converged = r.minres_hist === nothing ? missing : r.minres_hist.isconverged,
+                         n_active_T = r.n_active_T, n_active_z = r.n_active_z))
+        verbose && @info "resolve_initial_α_β iteration $(length(history))" α β L=r.L n_active_T=r.n_active_T n_active_z=r.n_active_z
         r.L
     end
     opt.xtol_rel = xtol_rel

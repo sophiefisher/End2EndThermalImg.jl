@@ -161,12 +161,12 @@ function run_forward_and_backward(geoms, freqs, php, imghp, jhp, object, weights
 
     b = N_adjoint = nothing
     t_build_b = @elapsed begin
-        _, active_linear_indices = End2EndThermalImg.get_active_variables(object_opt.zmap, imghp)
-        free_linear_indices = setdiff(1:imghp.objN^2, active_linear_indices)
-        b_T = vec(2 .* (object.Tmap .- object_opt.Tmap) ./ norm(object.Tmap)^2)
-        b_z = vec(2 .* (object.zmap .- object_opt.zmap) ./ norm(object.zmap)^2)[free_linear_indices]
+        idx = End2EndThermalImg.get_free_and_active_indices(object_opt, imghp)
+        free_T, free_z = idx.free_T, idx.free_z
+        b_T = vec(2 .* (object.Tmap .- object_opt.Tmap) ./ norm(object.Tmap)^2)[free_T]
+        b_z = vec(2 .* (object.zmap .- object_opt.zmap) ./ norm(object.zmap)^2)[free_z]
         b = [b_T; b_z]
-        N_adjoint = 2 * imghp.objN^2 - length(active_linear_indices)
+        N_adjoint = length(free_T) + length(free_z)
     end
     println("[$pass_label] build b                               : $(t_build_b) s")
 

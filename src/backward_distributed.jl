@@ -139,15 +139,21 @@ function Λ_dot_dFdo_distributed(Λ, object, object_opt, geoms, fftPSFs_precompu
     image_opt = make_image_from_3D(object_opt, fftPSFs, weights, plan_PSF, php, imghp)
     image_diff = v .- image_opt
 
-    Λ_T_2D = ignore_derivatives(() -> reshape(Λ[1:imghp.objN^2], imghp.objN, imghp.objN))
-
     # see Λ_dot_dFdo (backward.jl) for why this scatter needs ignore_derivatives specifically
+    free_T, free_z = ignore_derivatives() do
+        idx = get_free_and_active_indices(object_opt, imghp)
+        idx.free_T, idx.free_z
+    end
+    Λ_T_2D = ignore_derivatives() do
+        Λ_T = Λ[1:length(free_T)]
+        Λ_T_full = zeros(eltype(Λ_T), imghp.objN^2)
+        Λ_T_full[free_T] .= Λ_T
+        reshape(Λ_T_full, imghp.objN, imghp.objN)
+    end
     Λ_z_2D = ignore_derivatives() do
-        Λ_z = Λ[imghp.objN^2 + 1:end]
-        _, active_linear_indices = get_active_variables(object_opt.zmap, imghp)
-        free_linear_indices = setdiff(1:imghp.objN^2, active_linear_indices)
+        Λ_z = Λ[length(free_T) + 1:end]
         Λ_z_full = zeros(eltype(Λ_z), imghp.objN^2)
-        Λ_z_full[free_linear_indices] .= Λ_z
+        Λ_z_full[free_z] .= Λ_z
         reshape(Λ_z_full, imghp.objN, imghp.objN)
     end
 
@@ -186,8 +192,8 @@ end
 # 2*(z_opt - z_middle) respectively (zero cross terms between the T/z blocks), evaluated at
 # object_opt (the same point Λ itself is defined at). Contracting those against the matching block
 # of Λ gives dL/dα, dL/dβ directly via the same adjoint identity used for dL/dgeoms -- no second
-# Hessian solve needed. z_opt's active (bound-pinned) pixels are dropped the same way Λ_z/b_z
-# already are (see get_active_variables / Λ_dot_dFdo_distributed above).
+# Hessian solve needed. object_opt's active (bound-pinned) T/z pixels are dropped the same way
+# Λ_T/Λ_z already are (see get_free_and_active_indices / Λ_dot_dFdo_distributed above).
 function outer_gradient_distributed(Λ, object, object_opt, geoms, fftPSFs_precomputed, freqs, weights, plans_PSF, noise, noise_type::AbstractNoiseType, rechp, php, imghp, PSF_scale)
     ∇geoms = Zygote.gradient(
         g -> Λ_dot_dFdo_distributed(Λ, object, object_opt, g, fftPSFs_precomputed, freqs, weights, plans_PSF, noise, noise_type, php, imghp, PSF_scale),
@@ -195,14 +201,14 @@ function outer_gradient_distributed(Λ, object, object_opt, geoms, fftPSFs_preco
     )[1]
 
     @unpack T_background, z_middle = rechp
-    _, active_linear_indices = get_active_variables(object_opt.zmap, imghp)
-    free_linear_indices = setdiff(1:imghp.objN^2, active_linear_indices)
+    idx = get_free_and_active_indices(object_opt, imghp)
+    free_T, free_z = idx.free_T, idx.free_z
 
-    Λ_T = Λ[1:imghp.objN^2]
-    Λ_z = Λ[imghp.objN^2 + 1:end]
+    Λ_T = Λ[1:length(free_T)]
+    Λ_z = Λ[length(free_T) + 1:end]
 
-    dL_dα = 2 * dot(Λ_T, vec(object_opt.Tmap .- T_background))
-    dL_dβ = 2 * dot(Λ_z, vec(object_opt.zmap .- z_middle)[free_linear_indices])
+    dL_dα = 2 * dot(Λ_T, vec(object_opt.Tmap .- T_background)[free_T])
+    dL_dβ = 2 * dot(Λ_z, vec(object_opt.zmap .- z_middle)[free_z])
 
     return [vec(∇geoms); dL_dα; dL_dβ]
 end
@@ -316,12 +322,13 @@ function hvp_backward_shard(intermediate_TT, intermediate_Tz, weights)
 end
 
 # α/β: as in build_hessian_operator (backward.jl) -- required, and must equal the values given to
-# the reconstruction, since the operator is H_data + diag(2α on T, 2β on the free z pixels).
+# the reconstruction, since the operator is H_data + diag(2α on the free T pixels, 2β on the free
+# z pixels).
 function build_hessian_operator_distributed(object, object_opt, fftPSFs, freqs, weights, plans_PSF, noise, noise_type::AbstractNoiseType, α, β, php, imghp)
     PSF_zcoords = get_PSF_zcoords(imghp)
-    _, active_linear_indices = get_active_variables(object_opt.zmap, imghp)
-    free_linear_indices = setdiff(1:imghp.objN^2, active_linear_indices)
-    N = 2 * imghp.objN^2 - length(active_linear_indices)
+    idx = get_free_and_active_indices(object_opt, imghp)
+    free_T, free_z = idx.free_T, idx.free_z
+    N = length(free_T) + length(free_z)
 
     plan_PSF = plans_PSF[1]
     noisy_image = make_noisy_image_from_3D(object, fftPSFs, weights, noise, noise_type, plan_PSF, php, imghp)
@@ -331,13 +338,15 @@ function build_hessian_operator_distributed(object, object_opt, fftPSFs, freqs, 
     sum_TT_2, sum_Tz_2, sum_zz_2 = init_hvp_resident_distributed!(object_opt, image_diff, freqs, PSF_zcoords, weights, php, imghp)
 
     function hessian_vector_product_distributed!(Hv::AbstractVector, v::AbstractVector)
-        v_T = @view v[1:imghp.objN^2]
-        v_z = @view v[imghp.objN^2+1:end]
+        v_T = @view v[1:length(free_T)]
+        v_z = @view v[length(free_T)+1:end]
 
-        v_T_2D = reshape(v_T, imghp.objN, imghp.objN)
+        v_T_full = zeros(eltype(v_T), imghp.objN^2)
+        v_T_full[free_T] .= v_T
+        v_T_2D = reshape(v_T_full, imghp.objN, imghp.objN)
 
         v_z_full = zeros(eltype(v_z), imghp.objN^2)
-        v_z_full[free_linear_indices] .= v_z
+        v_z_full[free_z] .= v_z
         v_z_2D = reshape(v_z_full, imghp.objN, imghp.objN)
 
         # round 1: forward-convolve v_T_2D/v_z_2D against each worker's shard, reduce to the
@@ -359,16 +368,19 @@ function build_hessian_operator_distributed(object, object_opt, fftPSFs, freqs, 
         term_zT_2 = sum_Tz_2 .* v_T_2D
         term_zz_2 = sum_zz_2 .* v_z_2D
 
-        # 2α .* v_T / 2β .* v_z_full are the regularization Hessians of the T-T and z-z blocks
-        # (v_z_full is zero at the active pixels, and Hv_zz is on the full grid before compaction)
-        Hv_TT = vec(2 .* term_TT_1) .+ vec(-2 .* term_TT_2) .+ 2α .* v_T
+        # 2α .* v_T_full / 2β .* v_z_full are the regularization Hessians of the T-T and z-z
+        # blocks (both zero at their respective active pixels, and both blocks are on the full
+        # grid before compaction)
+        Hv_TT = vec(2 .* term_TT_1) .+ vec(-2 .* term_TT_2) .+ 2α .* v_T_full
         Hv_Tz = vec(2 .* term_Tz_1) .+ vec(-2 .* term_Tz_2)
-        Hv[1:imghp.objN^2] .= Hv_TT .+ Hv_Tz
 
         Hv_zT = vec(2 .* term_zT_1) .+ vec(-2 .* term_zT_2)
         Hv_zz = vec(2 .* term_zz_1) .+ vec(-2 .* term_zz_2) .+ 2β .* v_z_full
+
+        Hv_T_full = Hv_TT .+ Hv_Tz
         Hv_z_full = Hv_zT .+ Hv_zz
-        Hv[imghp.objN^2+1:end] .= Hv_z_full[free_linear_indices]
+        Hv[1:length(free_T)] .= Hv_T_full[free_T]
+        Hv[length(free_T)+1:end] .= Hv_z_full[free_z]
 
         Hv
     end

@@ -108,10 +108,10 @@ end
 # Computes Λ ⋅ dF/do, the adjoint-weighted sensitivity of the forward image-formation map F
 # (parameterized by the metasurface geometry o = geoms) needed for the outer geoms-optimization
 # gradient. Λ is the concatenation of the reconstruction adjoint state for T and z:
-# Λ = [Λ_T; Λ_z], where Λ_T has length objN^2 (T has no bound constraints, so every T pixel is a
-# free reconstruction variable) and Λ_z has length objN^2 - (# active variables): z pixels
-# pinned at the PSF_zlb/PSF_zub bounds are dropped from the reconstruction's optimization
-# variables entirely, so they're simply absent from Λ_z rather than zero.
+# Λ = [Λ_T; Λ_z], where Λ_T has length objN^2 - (# active T pixels) and Λ_z has length
+# objN^2 - (# active z pixels): pixels pinned at their bounds (T_LOWER_BOUND for T,
+# PSF_zlb/PSF_zub for z) are dropped from the reconstruction's optimization variables entirely, so
+# they're simply absent from Λ_T/Λ_z rather than zero.
 function Λ_dot_dFdo(Λ, object, object_opt, geoms, fftPSFs_precomputed, freqs, incidents, surrogates, n2f_kernels, plans_n2f, plans_PSF, weights, noise, noise_type::AbstractNoiseType, php, imghp, PSF_scale)
     PSF_zcoords = ignore_derivatives(() -> get_PSF_zcoords(imghp))
     δ_Δz = ignore_derivatives(() -> get_discretized_δ_function(imghp.smoothness_order, imghp.PSF_Δz))
@@ -132,18 +132,24 @@ function Λ_dot_dFdo(Λ, object, object_opt, geoms, fftPSFs_precomputed, freqs, 
     image_opt = make_image_from_3D(object_opt, fftPSFs, weights, plan_PSF, php, imghp)
     image_diff = v .- image_opt
 
-    Λ_T_2D = ignore_derivatives(() -> reshape(Λ[1:imghp.objN^2], imghp.objN, imghp.objN))
-
-    # scatter Λ_z back into the free (non-active) z pixels, in ascending linear-index order,
-    # leaving zeros at the active positions. ignore_derivatives here isn't just for consistency
-    # with the rest of this function -- the mutating `.=` scatter can't be differentiated
-    # through by Zygote at all.
+    # scatter Λ_T/Λ_z back into their free (non-active) pixels, in ascending linear-index order,
+    # leaving zeros at the active positions. ignore_derivatives isn't just for consistency with the
+    # rest of this function -- the mutating `.=` scatter can't be differentiated through by Zygote
+    # at all.
+    free_T, free_z = ignore_derivatives() do
+        idx = get_free_and_active_indices(object_opt, imghp)
+        idx.free_T, idx.free_z
+    end
+    Λ_T_2D = ignore_derivatives() do
+        Λ_T = Λ[1:length(free_T)]
+        Λ_T_full = zeros(eltype(Λ_T), imghp.objN^2)
+        Λ_T_full[free_T] .= Λ_T
+        reshape(Λ_T_full, imghp.objN, imghp.objN)
+    end
     Λ_z_2D = ignore_derivatives() do
-        Λ_z = Λ[imghp.objN^2 + 1:end]
-        _, active_linear_indices = get_active_variables(object_opt.zmap, imghp)
-        free_linear_indices = setdiff(1:imghp.objN^2, active_linear_indices)
+        Λ_z = Λ[length(free_T) + 1:end]
         Λ_z_full = zeros(eltype(Λ_z), imghp.objN^2)
-        Λ_z_full[free_linear_indices] .= Λ_z
+        Λ_z_full[free_z] .= Λ_z
         reshape(Λ_z_full, imghp.objN, imghp.objN)
     end
 
@@ -179,29 +185,46 @@ function Λ_dot_dFdo(Λ, object, object_opt, geoms, fftPSFs_precomputed, freqs, 
     return -(term1 + term2)
 end
 
-function get_active_variables(zmap, imghp)
-    cartesian_indices = findall(z -> z == imghp.PSF_zlb || z == imghp.PSF_zub, zmap)
-    linear_indices = LinearIndices(zmap)[cartesian_indices]
+# lb/ub passed explicitly (rather than looked up from imghp) so this works for both zmap
+# (imghp.PSF_zlb/PSF_zub) and Tmap (T_LOWER_BOUND, Inf -- T has no upper bound, and a finite Tmap
+# pixel is never == Inf, so this is "no upper bound" with no special-casing). The == exact-equality
+# check relies on the scale/unscale (to_scaled/to_physical) round-trip in
+# forward[_distributed].jl staying exact for the bound values -- already relied on for z, and for
+# T's own current pinning check (src/optimize.jl).
+function get_active_variables(map, lb, ub)
+    cartesian_indices = findall(x -> x == lb || x == ub, map)
+    linear_indices = LinearIndices(map)[cartesian_indices]
     return cartesian_indices, linear_indices
+end
+
+# Shared free/active linear-index bookkeeping for both Tmap (pinned at T_LOWER_BOUND) and zmap
+# (pinned at PSF_zlb/PSF_zub), needed by every adjoint/Hessian call site that touches Λ, b, or the
+# outer gradient -- Λ/b/Hv are each the concatenation of a (now-compacted) T block and z block.
+function get_free_and_active_indices(object_opt, imghp)
+    _, active_T = get_active_variables(object_opt.Tmap, T_LOWER_BOUND, Inf)
+    _, active_z = get_active_variables(object_opt.zmap, imghp.PSF_zlb, imghp.PSF_zub)
+    free_T = setdiff(1:imghp.objN^2, active_T)
+    free_z = setdiff(1:imghp.objN^2, active_z)
+    (; free_T, free_z, active_T, active_z)
 end
 
 # Builds a matrix-free LinearMaps.LinearMap for the Hessian of the inner reconstruction
 # objective w.r.t. the active object variables (Tmap/zmap pixels), evaluated at object_opt -- the
 # same active-variable space that Λ lives in in Λ_dot_dFdo/Λ_dot_dFdo_distributed (Λ_T has length
-# objN^2, Λ_z has length objN^2 - length(active_linear_indices), see the comment above
+# objN^2 - (# active T pixels), Λ_z has length objN^2 - (# active z pixels), see the comment above
 # Λ_dot_dFdo). The inner objective is the data misfit plus α||T - T_bg||^2 + β||z - z_middle||^2,
-# so the operator is H_data + diag(2α on T, 2β on the free z pixels): the 2α/2β terms are the
-# T-T and z-z blocks' regularization parts. α and β must therefore be the same values given to
-# reconstruct_Tmap_and_zmap[_distributed]; when they are large relative to the (tiny) data-misfit
-# curvature the regularization dominates the true Hessian. Intended for
+# so the operator is H_data + diag(2α on the free T pixels, 2β on the free z pixels): the 2α/2β
+# terms are the T-T and z-z blocks' regularization parts. α and β must therefore be the same
+# values given to reconstruct_Tmap_and_zmap[_distributed]; when they are large relative to the
+# (tiny) data-misfit curvature the regularization dominates the true Hessian. Intended for
 # IterativeSolvers.minres!(x0, A, b) to solve the adjoint equation A * Λ = b for Λ without ever
 # forming A explicitly. Not differentiated through (unlike Λ_dot_dFdo/get_fftPSFs_from_precomputed
 # above), so fftPSFs is just a concrete matrix here -- no rrule/geoms machinery needed.
 function build_hessian_operator(object, object_opt, fftPSFs, freqs, weights, plans_PSF, noise, noise_type::AbstractNoiseType, α, β, php, imghp)
     PSF_zcoords = get_PSF_zcoords(imghp)
-    _, active_linear_indices = get_active_variables(object_opt.zmap, imghp)
-    free_linear_indices = setdiff(1:imghp.objN^2, active_linear_indices)
-    N = 2 * imghp.objN^2 - length(active_linear_indices)
+    idx = get_free_and_active_indices(object_opt, imghp)
+    free_T, free_z = idx.free_T, idx.free_z
+    N = length(free_T) + length(free_z)
 
     # quantities that only depend on object_opt/freqs/php/imghp (not on v), so compute them once
     # here rather than re-deriving them on every hessian_vector_product! call / minres! iteration
@@ -233,15 +256,17 @@ function build_hessian_operator(object, object_opt, fftPSFs, freqs, weights, pla
     sum_zz_2 = sum(iF -> sum(iZ -> conv_image_diff[iF, iZ] .* B_opt[iF] .* d2C_dz2_opt[iZ], eachindex(PSF_zcoords)), eachindex(freqs))
 
     function hessian_vector_product!(Hv::AbstractVector, v::AbstractVector)
-        v_T = @view v[1:imghp.objN^2]
-        v_z = @view v[imghp.objN^2+1:end]
+        v_T = @view v[1:length(free_T)]
+        v_z = @view v[length(free_T)+1:end]
 
-        v_T_2D = reshape(v_T, imghp.objN, imghp.objN)
+        # scatter v_T/v_z back into their free (non-active) pixels, leaving zeros at the active
+        # (bound-pinned) positions -- mirrors Λ_T_2D/Λ_z_2D in Λ_dot_dFdo/Λ_dot_dFdo_distributed
+        v_T_full = zeros(eltype(v_T), imghp.objN^2)
+        v_T_full[free_T] .= v_T
+        v_T_2D = reshape(v_T_full, imghp.objN, imghp.objN)
 
-        # scatter v_z back into the free (non-active) z pixels, leaving zeros at the active
-        # (bound-pinned) positions -- mirrors Λ_z_2D in Λ_dot_dFdo/Λ_dot_dFdo_distributed
         v_z_full = zeros(eltype(v_z), imghp.objN^2)
-        v_z_full[free_linear_indices] .= v_z
+        v_z_full[free_z] .= v_z
         v_z_2D = reshape(v_z_full, imghp.objN, imghp.objN)
 
         intermediate_TT = sum(
@@ -291,20 +316,21 @@ function build_hessian_operator(object, object_opt, fftPSFs, freqs, weights, pla
         term_zT_2 = sum_Tz_2 .* v_T_2D
         term_zz_2 = sum_zz_2 .* v_z_2D
 
-        # 2α .* v_T / 2β .* v_z_full are the regularization Hessians of the T-T and z-z blocks
-        # (v_z_full is zero at the active pixels, and Hv_zz is on the full grid before compaction)
-        Hv_TT = vec(2 .* term_TT_1) .+ vec(-2 .* term_TT_2) .+ 2α .* v_T
+        # 2α .* v_T_full / 2β .* v_z_full are the regularization Hessians of the T-T and z-z
+        # blocks (both zero at their respective active pixels, and both blocks are on the full
+        # grid before compaction)
+        Hv_TT = vec(2 .* term_TT_1) .+ vec(-2 .* term_TT_2) .+ 2α .* v_T_full
         Hv_Tz = vec(2 .* term_Tz_1) .+ vec(-2 .* term_Tz_2)
-        Hv[1:imghp.objN^2] .= Hv_TT .+ Hv_Tz
 
         Hv_zT = vec(2 .* term_zT_1) .+ vec(-2 .* term_zT_2)
         Hv_zz = vec(2 .* term_zz_1) .+ vec(-2 .* term_zz_2) .+ 2β .* v_z_full
 
-        # combine the lower block (full objN x objN grid), then compact down to the free
-        # (non-active) z pixels -- mirrors the free_linear_indices scatter used to build v_z_2D,
-        # in reverse
+        # combine each block (full objN x objN grid), then compact down to the free (non-active)
+        # pixels -- mirrors the free_T/free_z scatter used to build v_T_2D/v_z_2D, in reverse
+        Hv_T_full = Hv_TT .+ Hv_Tz
         Hv_z_full = Hv_zT .+ Hv_zz
-        Hv[imghp.objN^2+1:end] .= Hv_z_full[free_linear_indices]
+        Hv[1:length(free_T)] .= Hv_T_full[free_T]
+        Hv[length(free_T)+1:end] .= Hv_z_full[free_z]
 
         Hv
     end
