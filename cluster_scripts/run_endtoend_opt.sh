@@ -21,6 +21,10 @@ PROJECT_DIR="$HOME/End2EndThermalImg.jl"
 # packages at once and end up lock-waiting on each other. --threads must match the run below,
 # since some packages' caches are invalidated when reloaded under a different thread count, which
 # otherwise forces a second precompile pass.
-julia --project=${PROJECT_DIR} --threads=${SLURM_CPUS_PER_TASK} -e 'import Pkg; Pkg.instantiate(); Pkg.precompile()'
+# io=devnull: this step still fills log-%j-%x.out with many lines of Pkg's own
+# compilecache-contention warnings (other jobs on the cluster share this same networked depot) --
+# harmless (a real failure here still throws and halts the script), but drowns out the actual run.
+# Pkg.precompile's `io` kwarg (default stderr) controls exactly this display.
+julia --project=${PROJECT_DIR} --threads=${SLURM_CPUS_PER_TASK} -e 'import Pkg; Pkg.instantiate(); Pkg.precompile(io=devnull)'
 
 julia --project=${PROJECT_DIR} --threads=${SLURM_CPUS_PER_TASK} scripts/endtoend_opt.jl

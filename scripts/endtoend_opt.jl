@@ -10,6 +10,15 @@ println("threads per worker = ", [remotecall_fetch(Threads.nthreads, p) for p in
 
 # Same hyperparameters used throughout jupyter_notebooks/2026-10-19-run-optimization.ipynb and
 # scripts/time_pipeline.jl.
+#
+# α_init/β_init default to :auto (resolve_initial_α_β runs first, see src/tune_regularization.jl)
+# -- override both via E2E_ALPHA_INIT/E2E_BETA_INIT env vars to fix them at a literal value
+# instead and skip that resolution step, e.g.:
+#   sbatch --export=ALL,E2E_ALPHA_INIT=1e-7,E2E_BETA_INIT=1e-7 cluster_scripts/run_endtoend_opt.sh
+parse_αβ_init(s) = s == "auto" ? :auto : parse(Float64, s)
+α_init = parse_αβ_init(get(ENV, "E2E_ALPHA_INIT", "auto"))
+β_init = parse_αβ_init(get(ENV, "E2E_BETA_INIT", "auto"))
+
 @everywhere begin
     php = PhysicsHyperParams(
         λlb_μm = 8.0,
@@ -57,8 +66,8 @@ println("threads per worker = ", [remotecall_fetch(Threads.nthreads, p) for p in
         T_background = 293.15,
         z_middle_μm = -1.5e6,
         algorithm = :LD_LBFGS,
-        α_init = :auto,
-        β_init = :auto,
+        α_init = $α_init,
+        β_init = $β_init,
         maxeval = 2000,
         xtol_rel = 0.0,
         ftol_rel = 0.0,
