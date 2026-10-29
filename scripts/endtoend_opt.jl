@@ -2,6 +2,15 @@ using End2EndThermalImg
 using Distributed
 using LinearAlgebra
 using Statistics
+using Logging
+
+# Route @info/@warn to stdout instead of the default stderr. run_endtoend_opt.sh doesn't set
+# --error, so SLURM merges both streams into one log file -- but stdout becomes block-buffered
+# once redirected to a file while stderr is flushed eagerly, so without this the two streams
+# interleave by flush timing rather than true call order, making @info output appear well before
+# println/@time output that actually ran earlier. Routing both through the same stream removes
+# that race entirely.
+global_logger(ConsoleLogger(stdout))
 
 nw = End2EndThermalImg.setup_cluster_workers()
 println("nworkers = ", nworkers(), "  workers = ", workers())
