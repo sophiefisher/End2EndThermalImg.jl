@@ -111,7 +111,9 @@ geoms = End2EndThermalImg.initialize_geoms(php, opthp; imghp = imghp)
 println("\n--- choosing PSF_scale ---")
 reference_scale = 1.0
 End2EndThermalImg.update_geoms_and_fftPSFs!(geoms, freqs, php, imghp, reference_scale)
-object_reference = End2EndThermalImg.get_object(imghp)
+object_reference = End2EndThermalImg.with_tuning_rng(php, imghp) do
+    End2EndThermalImg.get_object(imghp)
+end
 image_reference = End2EndThermalImg.make_image_from_3D_distributed(object_reference, weights, php, imghp)
 PSF_scale = End2EndThermalImg.choose_PSF_scale(image_reference, reference_scale; target_mean = 1.0)
 println("chosen PSF_scale = ", PSF_scale, "  (mean(image) at reference_scale=1.0 was ", mean(image_reference), ")")

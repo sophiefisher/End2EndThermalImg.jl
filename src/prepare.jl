@@ -424,6 +424,36 @@ function get_object(imghp::ImagingHyperParams)
     get_object(imghp.object_type, imghp)
 end
 
+# Deterministic seed derived from (php, imghp) -- the same values always hash to the same seed
+# (confirmed: Julia's default struct hash is fieldwise/value-based, not objectid-based, so this is
+# stable across separate Julia processes/job submissions, not just within one).
+tuning_seed(php::PhysicsHyperParams, imghp::ImagingHyperParams) = hash((php, imghp))
+
+# Runs f() with the global RNG temporarily seeded to tuning_seed(php, imghp), then restores the RNG
+# to whatever state it was in before this call -- so f()'s draws become a reproducible function of
+# (php, imghp), while everything that runs AFTER this call (in particular
+# train_outer_optimization_distributed's own per-iteration object/noise draws, src/optimize.jl) is
+# left exactly as if this call had never happened, not merely "seeded here and left seeded from
+# then on" (which would otherwise make the outer loop's randomness depend on incidental details
+# like whether find_or_resolve_initial_α_β's cache was a hit or a miss). Confirmed empirically: a
+# draw taken right after this call is bit-for-bit identical to the same draw taken with no call to
+# this function in between at all.
+#
+# Used to make choosing PSF_scale's reference object (scripts/endtoend_opt.jl) and
+# resolve_initial_α_β's object/noise draw (src/tune_regularization.jl) reproducible -- which is
+# also what lets find_or_resolve_initial_α_β's cache (src/tune_regularization.jl) actually hit
+# across separate job submissions with the same hyperparameters, rather than comparing against
+# results from an unreproducible random draw.
+function with_tuning_rng(f, php::PhysicsHyperParams, imghp::ImagingHyperParams)
+    saved_rng = copy(Random.default_rng())
+    Random.seed!(tuning_seed(php, imghp))
+    try
+        f()
+    finally
+        copy!(Random.default_rng(), saved_rng)
+    end
+end
+
 function get_PSF_zcoords(imghp::ImagingHyperParams)
     LinRange(imghp.PSF_zlb, imghp.PSF_zub, imghp.PSF_zlen)
 end

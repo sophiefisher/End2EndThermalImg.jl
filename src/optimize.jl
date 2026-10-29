@@ -199,13 +199,15 @@ end
 # saved, nothing further needs saving here once it returns.
 #
 # α/β here are whatever the caller passed as rechp.α_init/β_init -- if either is :auto, it's
-# resolved via resolve_initial_α_β (src/tune_regularization.jl) before the main loop starts, with
-# its own artifacts saved into run_folder/tune_regularization/ (see save_tune_regularization_state)
-# so everything from this job lands in one place. If neither is :auto, this is a no-op and α/β
-# are used exactly as given, unchanged from before this resolution step existed.
+# resolved via find_or_resolve_initial_α_β (src/tune_regularization.jl) before the main loop
+# starts, which reuses a prior resolve_initial_α_β result from tune_regularization/ if one already
+# exists for these hyperparameters, instead of always re-running the sweep. Either way, its
+# artifacts are saved into run_folder/tune_regularization/ (see save_tune_regularization_state) so
+# everything from this job lands in one place. If neither is :auto, this is a no-op and α/β are
+# used exactly as given, unchanged from before this resolution step existed.
 function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp::JobHyperParams, PSF_scale;
     verbose = true)
-    @unpack rechp = jhp
+    @unpack rechp, opthp = jhp
     root = ensure_optdata_folder()
     datetime = now()
     run_name = "opt_$(datetime)"
@@ -215,7 +217,7 @@ function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weigh
     if α === :auto || β === :auto
         α_start, β_start = 1e-7, 1e-7
         verbose && @info "α_init/β_init includes :auto -- resolving initial α/β before the main optimization"
-        tune_out = resolve_initial_α_β(rechp, geoms, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp, PSF_scale;
+        tune_out = find_or_resolve_initial_α_β(opthp, rechp, geoms, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp, PSF_scale;
             α_start = α_start, β_start = β_start, verbose = verbose)
         save_tune_regularization_state(run_folder, tune_out, α_start, β_start, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp, PSF_scale)
         α, β = tune_out.α, tune_out.β

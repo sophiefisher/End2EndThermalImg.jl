@@ -98,8 +98,9 @@ function resolve_initial_α_β(rechp, geoms, freqs, weights, driver_plans_PSF, P
     end
 
     update_geoms_and_fftPSFs!(geoms, freqs, jhp.php, imghp, PSF_scale)
-    object = get_object(imghp)
-    noise = generate_noise(imghp)
+    object, noise = with_tuning_rng(jhp.php, imghp) do
+        (get_object(imghp), generate_noise(imghp))
+    end
     history = NamedTuple[]
 
     # x holds log(α) (if α_auto), then log(β) (if β_auto), in that order -- length 1 or 2
@@ -146,6 +147,96 @@ function resolve_initial_α_β(rechp, geoms, freqs, weights, driver_plans_PSF, P
 
     (; α = α_resolved, β = β_resolved, history, return_value, object, noise, object_opt = r_final.object_opt,
        n_active_T = r_final.n_active_T, n_active_z = r_final.n_active_z)
+end
+
+# Top-level cache for resolve_initial_α_β results, analogous to inversedesign.jl's monochromatic-
+# lens cache (find_or_design_monochromatic_lens/fields_match) -- a sibling of optdata/ and
+# inversedesign/ at the project root, one subfolder per resolved (α, β), keyed by exact equality on
+# the php/imghp/rechp/opthp fields that actually affect this search (TUNE_REGULARIZATION_*_FIELDS
+# below), so repeated job submissions with the same setup skip re-running the sweep. This is
+# distinct from run_folder/tune_regularization/ (see save_tune_regularization_state below) -- that
+# is a per-job archival copy (with plots) of whichever result, fresh or cached, actually got used;
+# this is the lookup table deciding whether a fresh sweep is needed at all.
+#
+# Requires seed_tuning_rng! (src/prepare.jl) to be called before every random draw this result
+# depends on (resolve_initial_α_β's own object/noise draw, and PSF_scale's reference-object draw in
+# scripts/endtoend_opt.jl) -- otherwise two runs with identical php/imghp/rechp/opthp would still
+# resolve against different random realizations, and this cache would rarely hit in practice.
+function ensure_tune_regularization_folder()
+    root = "tune_regularization"
+    isdir(root) || mkdir(root)
+    root
+end
+
+# php/imghp: all raw (non-"Computed parameters") constructor fields -- the full forward/imaging
+# model the sweep's reconstruction error is evaluated against (unlike the narrower monochromatic-
+# lens design, nothing here is safe to drop). rechp: everything but α_init/β_init themselves (the
+# thing being resolved) and the z_middle computed field. opthp: only geoms_init_type/
+# geoms_init_path -- what determines the (otherwise unsaved) geoms, mirroring how inversedesign.jl
+# keys on design inputs rather than the geoms array itself.
+const TUNE_REGULARIZATION_PHP_FIELDS = (
+    :λlb_μm, :λub_μm, :freq_order, :focal_length_μm, :num_unit_cells, :unit_cell_length_μm,
+    :pillar_width_lb_μm, :pillar_width_ub_μm, :pillar_width_order, :pillar_height_μm,
+    :pillar_material, :substrate_height_μm, :substrate_material, :nG
+)
+const TUNE_REGULARIZATION_IMGHP_FIELDS = (
+    :objN, :imgN, :binN, :sampleN, :PSF_zlb_μm, :PSF_zub_μm, :PSF_zlen, :smoothness_order,
+    :object_type, :noise_type
+)
+const TUNE_REGULARIZATION_RECHP_FIELDS = (
+    :object_init_type, :T_background, :z_middle_μm, :algorithm, :maxeval, :xtol_rel, :ftol_rel, :ftol_abs
+)
+const TUNE_REGULARIZATION_OPTHP_FIELDS = (:geoms_init_type, :geoms_init_path)
+
+# Scans tune_regularization/ most-recent-first (mirrors find_matching_monochromatic_design),
+# returning the first subfolder whose saved php/imghp/rechp/opthp match on the relevant fields, or
+# nothing if none do.
+function find_matching_tune_regularization(php, imghp, rechp, opthp)
+    root = ensure_tune_regularization_folder()
+    for run_name in sort(readdir(root); rev = true)
+        results_file = joinpath(root, run_name, "results.jld2")
+        isfile(results_file) || continue
+        saved = JLD2.load(results_file)
+        all(haskey(saved, k) for k in ("php", "imghp", "rechp", "opthp")) || continue
+        if fields_match(php, saved["php"], TUNE_REGULARIZATION_PHP_FIELDS) &&
+           fields_match(imghp, saved["imghp"], TUNE_REGULARIZATION_IMGHP_FIELDS) &&
+           fields_match(rechp, saved["rechp"], TUNE_REGULARIZATION_RECHP_FIELDS) &&
+           fields_match(opthp, saved["opthp"], TUNE_REGULARIZATION_OPTHP_FIELDS)
+            return joinpath(root, run_name)
+        end
+    end
+    nothing
+end
+
+function save_tune_regularization_cache(php, imghp, rechp, opthp, tune_out)
+    root = ensure_tune_regularization_folder()
+    run_folder = joinpath(root, "resolved_$(now())")
+    mkdir(run_folder)
+    results_file = joinpath(run_folder, "results.jld2")
+    @unpack α, β, history, return_value, object, noise, object_opt, n_active_T, n_active_z = tune_out
+    @save results_file php imghp rechp opthp α β history return_value object noise object_opt n_active_T n_active_z
+    run_folder
+end
+
+# Drop-in replacement for resolve_initial_α_β at call sites that want this cache -- same signature
+# plus opthp up front (needed for the geoms_init_type/geoms_init_path cache key; not otherwise used
+# by resolve_initial_α_β itself). On a cache hit, returns the saved result without touching geoms/
+# freqs/weights/driver_plans_PSF/PSF_zcoords at all; on a miss, resolves fresh and saves it here
+# before returning.
+function find_or_resolve_initial_α_β(opthp, rechp, geoms, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp::JobHyperParams, PSF_scale; kwargs...)
+    @unpack php, imghp = jhp
+    match = find_matching_tune_regularization(php, imghp, rechp, opthp)
+    if match !== nothing
+        @info "Reusing existing tune_regularization result" run_folder=match
+        saved = JLD2.load(joinpath(match, "results.jld2"))
+        return (; α = saved["α"], β = saved["β"], history = saved["history"], return_value = saved["return_value"],
+                  object = saved["object"], noise = saved["noise"], object_opt = saved["object_opt"],
+                  n_active_T = saved["n_active_T"], n_active_z = saved["n_active_z"])
+    end
+    @info "No matching tune_regularization result found; resolving a new one"
+    tune_out = resolve_initial_α_β(rechp, geoms, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp, PSF_scale; kwargs...)
+    save_tune_regularization_cache(php, imghp, rechp, opthp, tune_out)
+    tune_out
 end
 
 # Saves resolve_initial_α_β's output into run_folder/tune_regularization/ -- a subfolder of the
