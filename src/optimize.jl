@@ -147,7 +147,7 @@ function train_outer_optimization_distributed(geoms, α, β, freqs, weights, dri
         verbose && @info "Iteration $iteration" entry.L entry.α entry.β entry.iteration_time entry.reconstruction_return_value entry.reconstruction_iterations entry.minres_converged entry.minres_iterations entry.n_active_T entry.n_active_z
 
         if run_folder !== nothing && (iteration % opthp.save_every == 0 || iteration == opthp.maxeval)
-            save_optimization_state(run_folder, php, imghp, opthp, rechp, PSF_scale,
+            save_optimization_state(run_folder, php, imghp, opthp, rechp, PSF_scale, vec(geoms),
                                      model.geoms, exp(model.logα[1]), exp(model.logβ[1]), history, datetime)
             verbose && @info "Checkpointed at iteration $iteration" run_folder
         end
@@ -168,22 +168,24 @@ function ensure_optdata_folder()
 end
 
 # Writes the full current state to run_folder/results.jld2 (php/imghp/opthp/rechp/PSF_scale,
-# geoms_opt_flat/α_opt/β_opt, history, datetime), run_folder/history.csv (the same history, for
-# inspection outside Julia), and three plots (geoms.png, loss_history.png, alpha_beta_history.png).
-# Called both periodically (checkpointing, from inside train_outer_optimization_distributed's loop)
-# and for the final save -- same payload either way, just overwritten in place each time (not
-# versioned per call), since the goal is "the latest state survives a cancelled job," not a full
-# checkpoint history. geoms is saved flattened under the key geoms_opt_flat specifically so a saved
-# run here is interchangeable with design_monochromatic_lens runs (inversedesign/*/results.jld2)
-# via the existing geoms_init_type == "loaded" / load_geoms mechanism (src/inversedesign.jl) --
-# either kind of saved run can seed either kind of future run.
-function save_optimization_state(run_folder, php, imghp, opthp, rechp, PSF_scale, geoms, α, β, history, datetime)
+# geoms_init_flat, geoms_opt_flat/α_opt/β_opt, history, datetime), run_folder/history.csv (the same
+# history, for inspection outside Julia), and three plots (geoms.png, loss_history.png,
+# alpha_beta_history.png). Called both periodically (checkpointing, from inside
+# train_outer_optimization_distributed's loop) and for the final save -- same payload either way,
+# just overwritten in place each time (not versioned per call), since the goal is "the latest state
+# survives a cancelled job," not a full checkpoint history. geoms is saved flattened under the key
+# geoms_opt_flat specifically so a saved run here is interchangeable with design_monochromatic_lens
+# runs (inversedesign/*/results.jld2) via the existing geoms_init_type == "loaded" / load_geoms
+# mechanism (src/inversedesign.jl) -- either kind of saved run can seed either kind of future run.
+# geoms_init_flat (the geoms this run started from, unchanged across checkpoints within one run) is
+# saved alongside purely for later reference -- unlike geoms_opt_flat, nothing reloads it.
+function save_optimization_state(run_folder, php, imghp, opthp, rechp, PSF_scale, geoms_init_flat, geoms, α, β, history, datetime)
     geoms_opt_flat = vec(geoms)
     α_opt = α
     β_opt = β
 
     results_file = joinpath(run_folder, "results.jld2")
-    @save results_file php imghp opthp rechp PSF_scale geoms_opt_flat α_opt β_opt history datetime
+    @save results_file php imghp opthp rechp PSF_scale geoms_init_flat geoms_opt_flat α_opt β_opt history datetime
     CSV.write(joinpath(run_folder, "history.csv"), DataFrame(history))
 
     plot_geoms(geoms_opt_flat, php; savefile = "$(run_folder)/geoms.png")
@@ -205,9 +207,21 @@ end
 # artifacts are saved into run_folder/tune_regularization/ (see save_tune_regularization_state) so
 # everything from this job lands in one place. If neither is :auto, this is a no-op and α/β are
 # used exactly as given, unchanged from before this resolution step existed.
+#
+# Also saves an initial-vs-final comparison of geoms, PSFs, and reconstruction performance:
+# geoms_{initial,final,comparison}.png, PSFs_{initial,final}.png, reconstruction_{initial,final}.png.
+# "Initial" is geoms/α/β exactly as the main loop is about to start with (post α/β-resolution, pre
+# any Adam updates); "final" is out.geoms/out.α/out.β after it returns. Both reconstructions use
+# the SAME test object/noise pair (drawn once via with_tuning_rng, so it's a reproducible function
+# of (php, imghp) rather than redrawn per state) but each state's OWN in-context α/β -- this
+# compares "what you'd actually get at each stage," not geoms in isolation. Real-space PSFs aren't
+# otherwise retained anywhere in the distributed pipeline (gather_PSFs_distributed,
+# src/forward_distributed.jl, recomputes and gathers them fresh each time); neither PSFs nor the
+# reconstruction object_opts are persisted to results.jld2, since both are cheap to regenerate from
+# the already-saved geoms_init_flat/geoms_opt_flat later if needed.
 function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp::JobHyperParams, PSF_scale;
     verbose = true)
-    @unpack rechp, opthp = jhp
+    @unpack php, imghp, rechp, opthp = jhp
     root = ensure_optdata_folder()
     datetime = now()
     run_name = "opt_$(datetime)"
@@ -224,8 +238,39 @@ function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weigh
         verbose && @info "Resolved initial α/β" α β
     end
 
+    test_object, test_noise = with_tuning_rng(php, imghp) do
+        (get_object(imghp), generate_noise(imghp))
+    end
+
+    verbose && @info "Computing initial-state geoms/PSFs/reconstruction comparison artifacts"
+    geoms_init_flat = vec(geoms)
+    PSFs_initial = gather_PSFs_distributed(geoms, freqs, php, imghp, PSF_scale, driver_plans_PSF, PSF_zcoords)
+    noisy_image_initial = make_noisy_image_from_3D_distributed(test_object, weights, test_noise, imghp.noise_type, php, imghp)
+    result_initial = reconstruct_Tmap_and_zmap_distributed(noisy_image_initial, weights, α, β, jhp; objective_scale = :auto)
+    plot_geoms(geoms_init_flat, php; savefile = "$(run_folder)/geoms_initial.png")
+    plot_reconstruction_results(test_object, result_initial.object_opt;
+        extra_title = "initial state: α = $α, β = $β", savefile = "$(run_folder)/reconstruction_initial.png")
+
     out = train_outer_optimization_distributed(geoms, α, β, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp, PSF_scale;
         run_folder = run_folder, datetime = datetime, verbose = verbose)
+
+    verbose && @info "Computing final-state geoms/PSFs/reconstruction comparison artifacts"
+    geoms_final_flat = vec(out.geoms)
+    PSFs_final = gather_PSFs_distributed(out.geoms, freqs, php, imghp, PSF_scale, driver_plans_PSF, PSF_zcoords)
+    noisy_image_final = make_noisy_image_from_3D_distributed(test_object, weights, test_noise, imghp.noise_type, php, imghp)
+    result_final = reconstruct_Tmap_and_zmap_distributed(noisy_image_final, weights, out.α, out.β, jhp; objective_scale = :auto)
+    plot_geoms(geoms_final_flat, php; savefile = "$(run_folder)/geoms_final.png")
+    plot_reconstruction_results(test_object, result_final.object_opt;
+        extra_title = "final state: α = $(out.α), β = $(out.β)", savefile = "$(run_folder)/reconstruction_final.png")
+
+    plot_geoms_comparison(geoms_init_flat, geoms_final_flat, php; savefile = "$(run_folder)/geoms_comparison.png")
+
+    PSF_vmin = minimum(minimum(minimum.(PSFs)) for PSFs in (PSFs_initial, PSFs_final))
+    PSF_vmax = maximum(maximum(maximum.(PSFs)) for PSFs in (PSFs_initial, PSFs_final))
+    plot_PSFs_grid(PSFs_initial, PSF_zcoords, freqs; vmin = PSF_vmin, vmax = PSF_vmax,
+        extra_title = "initial", savefile = "$(run_folder)/PSFs_initial.png")
+    plot_PSFs_grid(PSFs_final, PSF_zcoords, freqs; vmin = PSF_vmin, vmax = PSF_vmax,
+        extra_title = "final", savefile = "$(run_folder)/PSFs_final.png")
 
     results_file = joinpath(run_folder, "results.jld2")
     verbose && @info "Saved results" file=results_file

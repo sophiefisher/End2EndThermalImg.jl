@@ -19,6 +19,31 @@ function plot_geoms(geoms_flat, php; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = 
     return fig, ax
 end
 
+function plot_geoms_comparison(geoms_init_flat, geoms_final_flat, php; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y, fontsize = DEFAULT_FONTSIZE, cmap = ColorMap(colorschemes[:grays].colors), savefile = "")
+    geoms_init = unflatten_square_matrix(geoms_init_flat)
+    geoms_final = unflatten_square_matrix(geoms_final_flat)
+    matplotlib.rcParams["font.size"] = fontsize
+    fig, axes = subplots(1, 2, figsize=(2*figsize_x, figsize_y), constrained_layout=true)
+
+    # php.pillar_width_lb/ub, not a data-driven vmin/vmax: both panels already share this fixed,
+    # physically-meaningful scale for free (plot_geoms uses the same bounds), so there's no
+    # separate "shared across initial/final" computation needed here.
+    im = nothing
+    for (ax, geoms, title) in ((axes[0], geoms_init, "initial"), (axes[1], geoms_final, "final"))
+        im = ax.imshow(geoms, cmap=cmap, vmin=php.pillar_width_lb, vmax=php.pillar_width_ub)
+        ax.set_title(title, fontsize=fontsize)
+        ax.axis("off")
+    end
+    cbar = fig.colorbar(im, ax=axes, location="right", shrink=0.9)
+    cbar.set_label("Pillar widths (unitless)")
+
+    if !isempty(savefile)
+        fig.savefig(savefile, bbox_inches="tight")
+    end
+    plotclose()
+    return fig, axes
+end
+
 function plot_objective_function_history(objective_history; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y, fontsize = DEFAULT_FONTSIZE, savefile = "")
     matplotlib.rcParams["font.size"] = fontsize
     fig, ax = subplots(figsize=(figsize_x, figsize_y))
@@ -118,6 +143,52 @@ function plot_PSFs_at_z(PSFs_at_z, zcoord, freqs; figsize_x = DEFAULT_FIGSIZE_X,
     
     cbar = fig.colorbar(im, ax=axes, location="right", shrink=0.9)
     fig.text(0.5, 1.05, "z = $zcoord $(extra_title)", ha="center", va="top", transform=fig.transFigure, fontsize = fontsize)
+    if !isempty(savefile)
+        fig.savefig(savefile, bbox_inches="tight")
+    end
+    plotclose()
+    return fig, axes
+end
+
+# All PSFs (every z-coordinate x every frequency) in one grid -- z as rows, frequency as columns --
+# rather than plot_PSFs_at_z's one-file-per-z. Labels only the outer edge (frequency along the top
+# row, z along the left column) so label clutter grows with rows+columns, not rows*columns, as the
+# grid gets larger. PSFs: a Matrix{Matrix} indexed [iF, iZ] (gather_PSFs_distributed's shape,
+# src/forward_distributed.jl). vmin/vmax: pass explicitly (not left to auto-compute per call) when
+# comparing two such grids against each other, e.g. initial vs. final state, so they share one
+# color scale.
+function plot_PSFs_grid(PSFs, PSF_zcoords, freqs; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y, fontsize = DEFAULT_FONTSIZE, cmap = "viridis", savefile = "", vmin = nothing, vmax = nothing, extra_title = "", log_scale = true)
+    matplotlib.rcParams["font.size"] = fontsize
+    nF = length(freqs)
+    nZ = length(PSF_zcoords)
+    if isnothing(vmin) && isnothing(vmax)
+        vmin = minimum(minimum(PSF) for PSF in PSFs)
+        vmax = maximum(maximum(PSF) for PSF in PSFs)
+    end
+
+    fig, axes = subplots(nZ, nF, figsize=(nF*figsize_x, nZ*figsize_y), constrained_layout=true)
+    norm = log_scale ? matplotlib.colors.LogNorm(vmin=vmin, vmax=vmax) : nothing
+
+    im = nothing
+    for iZ in 1:nZ, iF in 1:nF
+        ax = if nZ == 1 && nF == 1
+            axes
+        elseif nZ == 1
+            axes[iF-1]
+        elseif nF == 1
+            axes[iZ-1]
+        else
+            axes[iZ-1, iF-1]
+        end
+        im = ax.imshow(PSFs[iF, iZ], norm=norm, cmap=cmap)
+        ax.axis("off")
+        iZ == 1 && ax.set_title(L"\nu = %$(round(freqs[iF],digits=2))", fontsize = fontsize)
+        iF == 1 && ax.text(-0.1, 0.5, "z = $(PSF_zcoords[iZ])", transform=ax.transAxes,
+            ha="right", va="center", fontsize = fontsize, rotation = 90)
+    end
+
+    cbar = fig.colorbar(im, ax=axes, location="right", shrink=0.9)
+    fig.text(0.5, 1.02, extra_title, ha="center", va="top", transform=fig.transFigure, fontsize = fontsize + 2)
     if !isempty(savefile)
         fig.savefig(savefile, bbox_inches="tight")
     end

@@ -110,6 +110,44 @@ function update_geoms_and_fftPSFs!(geoms, freqs, php, imghp, PSF_scale)
     nothing
 end
 
+# Gathers whatever fftPSFs are currently resident on each worker (as left by the most recent
+# update_geoms_and_fftPSFs! call) into a single driver-side Matrix. Same gather-plus-missing-cell-
+# check pattern already duplicated inline in train_outer_optimization_distributed (src/optimize.jl)
+# and reconstruction_error_and_grad (src/tune_regularization.jl); factored out here since
+# gather_PSFs_distributed below needs it as a third call site.
+function gather_fftPSFs_distributed(freqs, PSF_zcoords)
+    fftPSFs = Matrix{Matrix{ComplexF64}}(undef, length(freqs), length(PSF_zcoords))
+    for p in workers()
+        grid_inds, shard = remotecall_fetch(p) do
+            (_shard_grid_inds, _fftPSFs_shard)
+        end
+        for idx in grid_inds
+            iF, iZ = Tuple(idx)
+            fftPSFs[iF, iZ] = shard[(iF, iZ)]
+        end
+    end
+    missing_cells = [(iF, iZ) for iF in axes(fftPSFs, 1), iZ in axes(fftPSFs, 2) if !isassigned(fftPSFs, iF, iZ)]
+    isempty(missing_cells) || error("fftPSFs gather is missing $(length(missing_cells)) (freq, z) cells " *
+        "(e.g. $(first(missing_cells))) -- a worker likely died since assign_shard_indices! was last called; " *
+        "restart cluster workers and re-run setup (assign_shard_indices!/init_resident_incidents!/" *
+        "update_geoms_and_fftPSFs!) before retrying. workers() = $(workers())")
+    fftPSFs
+end
+
+# Updates geoms/fftPSFs for the given geoms, then gathers and inverse-FFTs them back to real-space
+# PSFs for visualization (plot_PSFs_grid, src/process.jl) -- the distributed pipeline otherwise
+# never retains real-space PSFs, only their FFT'd form (recompute_fftPSFs_shard! above discards the
+# real-space PSF immediately after transforming it). driver_plans_PSF[1]: this runs driver-side,
+# single-threaded, so any one thread's plan works; \ is the standard Julia idiom for applying a
+# plan_fft's inverse. Also leaves resident fftPSFs state synced to `geoms` as a side effect, which
+# callers that immediately follow this with a reconstruction at the same geoms (e.g.
+# run_and_save_outer_optimization_distributed) rely on.
+function gather_PSFs_distributed(geoms, freqs, php, imghp, PSF_scale, driver_plans_PSF, PSF_zcoords)
+    update_geoms_and_fftPSFs!(geoms, freqs, php, imghp, PSF_scale)
+    fftPSFs = gather_fftPSFs_distributed(freqs, PSF_zcoords)
+    map(fftPSF -> real.(driver_plans_PSF[1] \ fftPSF), fftPSFs)
+end
+
 function make_image_from_3D_shard(object, weights, php, imghp)
     # ignore_derivatives matches make_image_from_3D (forward.jl): these depend only on imghp,
     # not on `object`, but Zygote can't differentiate through get_PSF_zcoords' LinRange
