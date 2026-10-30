@@ -222,7 +222,11 @@ end
 # plus opthp up front (needed for the geoms_init_type/geoms_init_path cache key; not otherwise used
 # by resolve_initial_α_β itself). On a cache hit, returns the saved result without touching geoms/
 # freqs/weights/driver_plans_PSF/PSF_zcoords at all; on a miss, resolves fresh and saves it here
-# before returning.
+# before returning. Either way, the return value also carries cache_hit/cache_source (the matched
+# cache folder, or nothing on a miss) -- save_tune_regularization_state below threads these through
+# so a given job's own run_folder/tune_regularization/ records which case it was, not just the
+# resolved α/β themselves (otherwise indistinguishable from the outside, since that folder's
+# content looks the same either way).
 function find_or_resolve_initial_α_β(opthp, rechp, geoms, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp::JobHyperParams, PSF_scale; kwargs...)
     @unpack php, imghp = jhp
     match = find_matching_tune_regularization(php, imghp, rechp, opthp)
@@ -231,12 +235,13 @@ function find_or_resolve_initial_α_β(opthp, rechp, geoms, freqs, weights, driv
         saved = JLD2.load(joinpath(match, "results.jld2"))
         return (; α = saved["α"], β = saved["β"], history = saved["history"], return_value = saved["return_value"],
                   object = saved["object"], noise = saved["noise"], object_opt = saved["object_opt"],
-                  n_active_T = saved["n_active_T"], n_active_z = saved["n_active_z"])
+                  n_active_T = saved["n_active_T"], n_active_z = saved["n_active_z"],
+                  cache_hit = true, cache_source = match)
     end
     @info "No matching tune_regularization result found; resolving a new one"
     tune_out = resolve_initial_α_β(rechp, geoms, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp, PSF_scale; kwargs...)
     save_tune_regularization_cache(php, imghp, rechp, opthp, tune_out)
-    tune_out
+    (; tune_out..., cache_hit = false, cache_source = nothing)
 end
 
 # Saves resolve_initial_α_β's output into run_folder/tune_regularization/ -- a subfolder of the
@@ -247,16 +252,23 @@ end
 # re-evaluating the former explicitly, the same way jupyter_notebooks/2026-10-23-tune-
 # regularization.ipynb's two reconstruction sections do, since resolve_initial_α_β's own return
 # value only carries the resolved reconstruction.
+#
+# Called unconditionally regardless of whether tune_out came from a cache hit or a miss (same
+# payload either way), so without cache_hit/cache_source this folder would look identical in both
+# cases -- cache_status.txt and the reconstruction_resolved.png title make that distinction visible
+# without needing to load results.jld2 to check.
 function save_tune_regularization_state(run_folder, tune_out, α_start, β_start, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp, PSF_scale)
     @unpack php, imghp, rechp = jhp
-    @unpack α, β, history, return_value, object, noise, object_opt, n_active_T, n_active_z = tune_out
+    @unpack α, β, history, return_value, object, noise, object_opt, n_active_T, n_active_z, cache_hit, cache_source = tune_out
 
     tune_folder = joinpath(run_folder, "tune_regularization")
     mkdir(tune_folder)
 
     results_file = joinpath(tune_folder, "results.jld2")
-    @save results_file php imghp rechp PSF_scale α β α_start β_start history return_value object noise object_opt n_active_T n_active_z
+    @save results_file php imghp rechp PSF_scale α β α_start β_start history return_value object noise object_opt n_active_T n_active_z cache_hit cache_source
     CSV.write(joinpath(tune_folder, "history.csv"), DataFrame(history))
+    write(joinpath(tune_folder, "cache_status.txt"),
+        cache_hit ? "cache hit\nsource: $cache_source\n" : "cache miss (freshly resolved)\n")
 
     plot_alpha_beta_history([h.α for h in history], [h.β for h in history];
         log_scale = true, savefile = "$(tune_folder)/alpha_beta_history.png")
@@ -267,8 +279,9 @@ function save_tune_regularization_state(run_folder, tune_out, α_start, β_start
         extra_title = "α = $α_start, β = $β_start  (initial, before tuning).  n_active_T=$(r_init.n_active_T), n_active_z=$(r_init.n_active_z)",
         savefile = "$(tune_folder)/reconstruction_initial.png")
 
+    cache_note = cache_hit ? "cache hit: $cache_source" : "freshly resolved"
     plot_reconstruction_results(object, object_opt;
-        extra_title = "α = $α, β = $β  (resolved).  n_active_T=$n_active_T, n_active_z=$n_active_z",
+        extra_title = "α = $α, β = $β  (resolved, $cache_note).  n_active_T=$n_active_T, n_active_z=$n_active_z",
         savefile = "$(tune_folder)/reconstruction_resolved.png")
 
     results_file
