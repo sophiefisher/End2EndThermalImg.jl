@@ -98,8 +98,10 @@ for (label, x) in ((:php, php), (:imghp, imghp), (:opthp, opthp), (:rechp, rechp
     println()
 end
 
-println("\n--- setup ---")
+println("\n--- system params ---")
 @time system_params = End2EndThermalImg.compute_system_parameters(php, imghp)
+
+println("\n--- setup ---")
 @time driver_plans_n2f, driver_plans_PSF = End2EndThermalImg.setup_fft_plans_distributed!(php, imghp)
 @time freqs = End2EndThermalImg.get_freq_chebpoints(php)
 @time n2f_kernels = End2EndThermalImg.compute_and_broadcast(:n2f_kernels, End2EndThermalImg.get_n2f_kernels, freqs, driver_plans_n2f, php, imghp)
