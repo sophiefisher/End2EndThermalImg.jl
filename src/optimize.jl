@@ -200,11 +200,14 @@ end
 # train_outer_optimization_distributed). Since the loop itself guarantees the final iteration is
 # saved, nothing further needs saving here once it returns.
 #
-# Writes run_folder/params.txt (php/imghp/opthp/rechp/PSF_scale, for inspection outside Julia --
-# see write_params_summary, src/prepare.jl) immediately once run_folder exists, rather than
-# waiting for the first checkpoint: unlike geoms/α/β/history, these never change over the course
-# of the run, so there's no reason to defer writing them, and writing them this early means
-# params.txt still exists even if the job dies before its first checkpoint.
+# Writes run_folder/params.txt (php/imghp/opthp/rechp/system_params/PSF_scale, for inspection
+# outside Julia -- see write_params_summary, src/prepare.jl) immediately once run_folder exists,
+# rather than waiting for the first checkpoint: unlike geoms/α/β/history, these never change over
+# the course of the run, so there's no reason to defer writing them, and writing them this early
+# means params.txt still exists even if the job dies before its first checkpoint. system_params
+# is the caller's own already-computed compute_system_parameters(php, imghp) result (src/prepare.jl)
+# -- passed in rather than recomputed here, since it's cheap but the caller has already computed
+# and printed it once (e.g. endtoend_opt.jl, right after php/imghp/opthp/rechp are built).
 #
 # α/β here are whatever the caller passed as rechp.α_init/β_init -- if either is :auto, it's
 # resolved via find_or_resolve_initial_α_β (src/tune_regularization.jl) before the main loop
@@ -225,7 +228,7 @@ end
 # src/forward_distributed.jl, recomputes and gathers them fresh each time); neither PSFs nor the
 # reconstruction object_opts are persisted to results.jld2, since both are cheap to regenerate from
 # the already-saved geoms_init_flat/geoms_opt_flat later if needed.
-function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp::JobHyperParams, PSF_scale;
+function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp::JobHyperParams, PSF_scale, system_params;
     verbose = true)
     @unpack php, imghp, rechp, opthp = jhp
     root = ensure_optdata_folder()
@@ -233,7 +236,7 @@ function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weigh
     run_name = "opt_$(datetime)"
     run_folder = joinpath(root, run_name)
     mkdir(run_folder)
-    write_params_summary(joinpath(run_folder, "params.txt"), php, imghp, opthp, rechp, PSF_scale)
+    write_params_summary(joinpath(run_folder, "params.txt"), php, imghp, opthp, rechp, system_params, PSF_scale)
 
     if α === :auto || β === :auto
         α_start, β_start = 1e-7, 1e-7

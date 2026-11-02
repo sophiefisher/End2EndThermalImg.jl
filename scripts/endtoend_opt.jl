@@ -99,7 +99,7 @@ for (label, x) in ((:php, php), (:imghp, imghp), (:opthp, opthp), (:rechp, rechp
 end
 
 println("\n--- setup ---")
-@time End2EndThermalImg.compute_system_parameters(php, imghp)
+@time system_params = End2EndThermalImg.compute_system_parameters(php, imghp)
 @time driver_plans_n2f, driver_plans_PSF = End2EndThermalImg.setup_fft_plans_distributed!(php, imghp)
 @time freqs = End2EndThermalImg.get_freq_chebpoints(php)
 @time n2f_kernels = End2EndThermalImg.compute_and_broadcast(:n2f_kernels, End2EndThermalImg.get_n2f_kernels, freqs, driver_plans_n2f, php, imghp)
@@ -136,7 +136,7 @@ End2EndThermalImg.update_geoms_and_fftPSFs!(geoms, freqs, php, imghp, PSF_scale)
 
 println("\n--- running outer optimization (", opthp.maxeval, " iterations) ---")
 out = End2EndThermalImg.run_and_save_outer_optimization_distributed(
-    geoms, rechp.α_init, rechp.β_init, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp, PSF_scale;
+    geoms, rechp.α_init, rechp.β_init, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp, PSF_scale, system_params;
     verbose = true
 )
 

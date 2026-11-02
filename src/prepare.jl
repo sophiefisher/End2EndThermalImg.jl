@@ -356,7 +356,7 @@ end
 # inspection in a run folder without loading results.jld2 in Julia -- the same role history.csv
 # plays for the optimization history (src/optimize.jl). Not a replacement for results.jld2 (the
 # programmatic source of truth, needed for reloading/analysis), just a convenience view.
-function write_params_summary(filepath, php, imghp, opthp, rechp, PSF_scale)
+function write_params_summary(filepath, php, imghp, opthp, rechp, system_params, PSF_scale)
     open(filepath, "w") do io
         write_param_lines(io, :php, php)
         println(io)
@@ -365,6 +365,8 @@ function write_params_summary(filepath, php, imghp, opthp, rechp, PSF_scale)
         write_param_lines(io, :opthp, opthp)
         println(io)
         write_param_lines(io, :rechp, rechp)
+        println(io)
+        write_param_lines(io, :system_params, system_params)
         println(io)
         write_param_lines(io, :PSF_scale, PSF_scale)
     end
@@ -516,15 +518,18 @@ prepare_noise_buf(imghp) = Array{Float64}(undef, imghp.imgN, imghp.imgN)
 prepare_image_buf(imghp) = Array{Float64}(undef, imghp.imgN, imghp.imgN)
 
 # TODO: add object pixel sizes for different depths
+# Returns a NamedTuple of system quantities derived from php/imghp (not stored on either struct
+# itself), and prints it via write_param_lines in the same "label (Type):\n  field = value" style
+# as the job hyperparameters themselves, for a consistent log format. The returned NamedTuple is
+# also threaded through to write_params_summary by callers that want it recorded in params.txt
+# (e.g. run_and_save_outer_optimization_distributed, src/optimize.jl).
 function compute_system_parameters(php::PhysicsHyperParams, imghp::ImagingHyperParams)
-    @info "Computing system parameters"
-
-    image_pixel_size = imghp.binN * php.unit_cell_length_μm
-    @info "Image pixel size = $(round(image_pixel_size,digits=4)) μm"
-
-    metasurface_size = php.unit_cell_length_μm * php.num_unit_cells
-    @info "Metasurface size = $(round(metasurface_size,digits=4)) μm [$( round(metasurface_size / 1e4,digits=4)) cm]"
-
+    image_pixel_size_μm = imghp.binN * php.unit_cell_length_μm
+    metasurface_size_μm = php.unit_cell_length_μm * php.num_unit_cells
+    metasurface_size_cm = metasurface_size_μm / 1e4
     NA = sin(atan( php.unit_cell_length_μm * php.num_unit_cells / (2 * php.focal_length_μm) ))
-    @info "NA: $( round(NA,digits=4 ))"
+
+    system_params = (; image_pixel_size_μm, metasurface_size_μm, metasurface_size_cm, NA)
+    write_param_lines(stdout, :system_params, system_params)
+    system_params
 end
