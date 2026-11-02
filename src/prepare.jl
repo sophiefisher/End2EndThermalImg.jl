@@ -525,11 +525,25 @@ prepare_image_buf(imghp) = Array{Float64}(undef, imghp.imgN, imghp.imgN)
 # (e.g. run_and_save_outer_optimization_distributed, src/optimize.jl).
 function compute_system_parameters(php::PhysicsHyperParams, imghp::ImagingHyperParams)
     image_pixel_size_μm = imghp.binN * php.unit_cell_length_μm
+    image_size_μm = image_pixel_size_μm * imghp.imgN
     metasurface_size_μm = php.unit_cell_length_μm * php.num_unit_cells
     metasurface_size_cm = metasurface_size_μm / 1e4
     NA = sin(atan( php.unit_cell_length_μm * php.num_unit_cells / (2 * php.focal_length_μm) ))
+    f_number = php.focal_length_μm / metasurface_size_μm
+    FOV_degrees = 2 * atan(image_size_μm / (2 * php.focal_length_μm)) * 180 / π
 
-    system_params = (; image_pixel_size_μm, metasurface_size_μm, metasurface_size_cm, NA)
+    # Diffraction limit (λ / (2·NA)) at the band edges and center -- object-side quantities like
+    # object_pixel_size/object_size/object_angle (computed in an older version of this package)
+    # are deliberately NOT included here: they depend on a single scalar depth, which this package
+    # no longer has (imghp has a z-range for PSF sampling instead, generally distinct from
+    # imghp.object_type's own z-extent), so porting them isn't a direct translation.
+    λmid_μm = (php.λlb_μm + php.λub_μm) / 2
+    difflim_λlb_μm = php.λlb_μm / (2 * NA)
+    difflim_λmid_μm = λmid_μm / (2 * NA)
+    difflim_λub_μm = php.λub_μm / (2 * NA)
+
+    system_params = (; image_pixel_size_μm, image_size_μm, metasurface_size_μm, metasurface_size_cm,
+                        NA, f_number, FOV_degrees, λmid_μm, difflim_λlb_μm, difflim_λmid_μm, difflim_λub_μm)
     write_param_lines(stdout, :system_params, system_params)
     system_params
 end
