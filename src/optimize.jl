@@ -169,7 +169,7 @@ end
 
 # Writes the full current state to run_folder/results.jld2 (php/imghp/opthp/rechp/PSF_scale,
 # geoms_init_flat, geoms_opt_flat/α_opt/β_opt, history, datetime), run_folder/history.csv (the same
-# history, for inspection outside Julia), and three plots (geoms.png, loss_history.png,
+# history, for inspection outside Julia), and three plots (geoms_checkpoint.png, loss_history.png,
 # alpha_beta_history.png). Called both periodically (checkpointing, from inside
 # train_outer_optimization_distributed's loop) and for the final save -- same payload either way,
 # just overwritten in place each time (not versioned per call), since the goal is "the latest state
@@ -188,7 +188,7 @@ function save_optimization_state(run_folder, php, imghp, opthp, rechp, PSF_scale
     @save results_file php imghp opthp rechp PSF_scale geoms_init_flat geoms_opt_flat α_opt β_opt history datetime
     CSV.write(joinpath(run_folder, "history.csv"), DataFrame(history))
 
-    plot_geoms(geoms_opt_flat, php; savefile = "$(run_folder)/geoms.png")
+    plot_geoms(geoms_opt_flat, php; savefile = "$(run_folder)/geoms_checkpoint.png")
     plot_objective_function_history([e.L for e in history]; savefile = "$(run_folder)/loss_history.png")
     plot_alpha_beta_history([e.α for e in history], [e.β for e in history]; savefile = "$(run_folder)/alpha_beta_history.png")
 
