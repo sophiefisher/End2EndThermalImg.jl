@@ -92,6 +92,12 @@ parse_αβ_init(s) = s == "auto" ? :auto : parse(Float64, s)
     )
 end
 
+println("\n--- job params ---")
+for (label, x) in ((:php, php), (:imghp, imghp), (:opthp, opthp), (:rechp, rechp))
+    End2EndThermalImg.write_param_lines(stdout, label, x)
+    println()
+end
+
 println("\n--- setup ---")
 @time End2EndThermalImg.compute_system_parameters(php, imghp)
 @time driver_plans_n2f, driver_plans_PSF = End2EndThermalImg.setup_fft_plans_distributed!(php, imghp)
