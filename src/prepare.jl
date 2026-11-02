@@ -336,6 +336,40 @@ end
     rechp::ReconstructionHyperParams
 end
 
+# Recursively writes "label = value" for each field of x, one per line, indenting into nested
+# struct fields (e.g. imghp.object_type/imghp.noise_type) rather than falling back to their
+# unreadable single-line default show. Generic over any struct via fieldnames/getfield, so it
+# stays correct automatically as fields are added/removed from the hyperparameter types, rather
+# than needing a hand-written formatter per type.
+function write_param_lines(io, label, x; indent = "")
+    if isstructtype(typeof(x)) && !(x isa Union{AbstractString, Symbol, Number, Bool})
+        println(io, indent, label, " (", typeof(x), "):")
+        for field in fieldnames(typeof(x))
+            write_param_lines(io, field, getfield(x, field); indent = indent * "  ")
+        end
+    else
+        println(io, indent, label, " = ", x)
+    end
+end
+
+# Writes a human-readable summary of this run's hyperparameters to filepath, for visual
+# inspection in a run folder without loading results.jld2 in Julia -- the same role history.csv
+# plays for the optimization history (src/optimize.jl). Not a replacement for results.jld2 (the
+# programmatic source of truth, needed for reloading/analysis), just a convenience view.
+function write_params_summary(filepath, php, imghp, opthp, rechp, PSF_scale)
+    open(filepath, "w") do io
+        write_param_lines(io, :php, php)
+        println(io)
+        write_param_lines(io, :imghp, imghp)
+        println(io)
+        write_param_lines(io, :opthp, opthp)
+        println(io)
+        write_param_lines(io, :rechp, rechp)
+        println(io)
+        write_param_lines(io, :PSF_scale, PSF_scale)
+    end
+end
+
 function get_wavcen(λlb_μm, λub_μm)
     freq_center = ((1/λlb_μm) + (1/λub_μm)) / 2
     wavcen = round(1 / freq_center, sigdigits = 3)

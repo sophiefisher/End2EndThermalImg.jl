@@ -169,8 +169,10 @@ end
 
 # Writes the full current state to run_folder/results.jld2 (php/imghp/opthp/rechp/PSF_scale,
 # geoms_init_flat, geoms_opt_flat/α_opt/β_opt, history, datetime), run_folder/history.csv (the same
-# history, for inspection outside Julia), and three plots (geoms_checkpoint.png, loss_history.png,
-# alpha_beta_history.png). Called both periodically (checkpointing, from inside
+# history, for inspection outside Julia), run_folder/params.txt (php/imghp/opthp/rechp/PSF_scale,
+# similarly for inspection outside Julia -- see write_params_summary, src/prepare.jl), and three
+# plots (geoms_checkpoint.png, loss_history.png, alpha_beta_history.png). Called both periodically
+# (checkpointing, from inside
 # train_outer_optimization_distributed's loop) and for the final save -- same payload either way,
 # just overwritten in place each time (not versioned per call), since the goal is "the latest state
 # survives a cancelled job," not a full checkpoint history. geoms is saved flattened under the key
@@ -187,6 +189,7 @@ function save_optimization_state(run_folder, php, imghp, opthp, rechp, PSF_scale
     results_file = joinpath(run_folder, "results.jld2")
     @save results_file php imghp opthp rechp PSF_scale geoms_init_flat geoms_opt_flat α_opt β_opt history datetime
     CSV.write(joinpath(run_folder, "history.csv"), DataFrame(history))
+    write_params_summary(joinpath(run_folder, "params.txt"), php, imghp, opthp, rechp, PSF_scale)
 
     plot_geoms(geoms_opt_flat, php; savefile = "$(run_folder)/geoms_checkpoint.png")
     plot_objective_function_history([e.L for e in history]; savefile = "$(run_folder)/loss_history.png")
