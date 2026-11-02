@@ -182,7 +182,7 @@ function plot_PSFs_grid(PSFs, PSF_zcoords, freqs; figsize_x = DEFAULT_FIGSIZE_X,
         end
         im = ax.imshow(PSFs[iF, iZ], norm=norm, cmap=cmap)
         ax.axis("off")
-        iZ == 1 && ax.set_title(L"\nu = %$(round(freqs[iF],digits=2))", fontsize = fontsize)
+        iZ == 1 && ax.set_title(L"\nu = %$(round(freqs[iF],digits=4))", fontsize = fontsize)
         iF == 1 && ax.text(-0.1, 0.5, "z = $(PSF_zcoords[iZ])", transform=ax.transAxes,
             ha="right", va="center", fontsize = fontsize, rotation = 90)
     end
