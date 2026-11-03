@@ -542,8 +542,17 @@ function compute_system_parameters(php::PhysicsHyperParams, imghp::ImagingHyperP
     difflim_λmid_μm = λmid_μm / (2 * NA)
     difflim_λub_μm = php.λub_μm / (2 * NA)
 
+    # Overdetermination check: object unknowns are Tmap + zmap, each objN×objN; measurements are
+    # the single imgN×imgN sensor image (sampleN/PSF_zlen are internal integration/sampling
+    # parameters, not separate acquisitions, so they don't factor in here).
+    n_object_pixels = 2 * imghp.objN^2
+    n_image_pixels = imghp.imgN^2
+    overdetermination_ratio = n_image_pixels / n_object_pixels
+    is_overdetermined = overdetermination_ratio > 1
+
     system_params = (; image_pixel_size_μm, image_size_μm, metasurface_size_μm, metasurface_size_cm,
-                        NA, f_number, FOV_degrees, λmid_μm, difflim_λlb_μm, difflim_λmid_μm, difflim_λub_μm)
+                        NA, f_number, FOV_degrees, λmid_μm, difflim_λlb_μm, difflim_λmid_μm, difflim_λub_μm,
+                        n_object_pixels, n_image_pixels, overdetermination_ratio, is_overdetermined)
     write_param_lines(stdout, :system_params, system_params)
     system_params
 end
