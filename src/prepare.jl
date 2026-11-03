@@ -580,6 +580,18 @@ function compute_system_parameters(php::PhysicsHyperParams, imghp::ImagingHyperP
     max_phase_error_rad = π * metasurface_size_μm^2 / (4 * php.λlb_μm * z_min_μm)
     is_farfield = max_phase_error_rad < π / 8
 
+    # Locally-periodic-approximation (LPA) check: get_near_field (forward.jl) computes the
+    # transmitted field as incident_field .* surrogate.(geoms) -- i.e. each unit cell's transmission
+    # is looked up as if it sat in an infinite periodic array under uniform (planar) illumination,
+    # then applied pointwise to the real (curved) incident field. This is a DIFFERENT, much smaller
+    # quantity than max_phase_error_rad above: that one asks whether the wavefront is flat across
+    # the WHOLE aperture (it isn't, and doesn't need to be -- any focusing lens curves its wavefront
+    # by design); this one asks whether it's flat across a SINGLE unit cell, which is what LPA
+    # actually requires. Same derivation as max_phase_error_rad, with unit_cell_length_μm in place
+    # of metasurface_size_μm.
+    max_phase_error_per_cell_rad = π * php.unit_cell_length_μm^2 / (4 * php.λlb_μm * z_min_μm)
+    is_LPA_valid = max_phase_error_per_cell_rad < π / 8
+
     # Object-extent check: imghp.object_type's own z-extent (get_object_zextent, dispatched per
     # object_type) should lie entirely within imghp.PSF_zlb_μm/PSF_zub_μm -- otherwise part of the
     # object is placed outside the z-range the PSFs are actually sampled over.
@@ -600,6 +612,7 @@ function compute_system_parameters(php::PhysicsHyperParams, imghp::ImagingHyperP
                         NA, f_number, FOV_degrees, λmid_μm, difflim_λlb_μm, difflim_λmid_μm, difflim_λub_μm,
                         n_object_pixels, n_image_pixels, overdetermination_ratio, is_overdetermined,
                         z_min_μm, paraxial_ratio, is_paraxial, max_phase_error_rad, is_farfield,
+                        max_phase_error_per_cell_rad, is_LPA_valid,
                         object_zlb_μm, object_zub_μm, is_object_within_PSF_bounds,
                         object_Tlb, object_Tub, is_T_background_within_object_Textent, is_T_background_at_midpoint,
                         is_z_middle_within_object_zextent, is_z_middle_at_midpoint)
@@ -621,6 +634,8 @@ function system_param_warnings(system_params)
         "paraxial approximation does not hold (paraxial_ratio = $(system_params.paraxial_ratio) ≥ 0.1): max_phase_error_rad/is_farfield may not be reliable")
     system_params.is_farfield || push!(warnings,
         "object illumination is not sufficiently far-field/plane-wave-like (max_phase_error_rad = $(system_params.max_phase_error_rad) ≥ π/8)")
+    system_params.is_LPA_valid || push!(warnings,
+        "locally-periodic approximation does not hold (max_phase_error_per_cell_rad = $(system_params.max_phase_error_per_cell_rad) ≥ π/8): get_near_field's per-cell surrogate lookup may not be accurate")
     system_params.is_object_within_PSF_bounds || push!(warnings,
         "object z-extent ($(system_params.object_zlb_μm), $(system_params.object_zub_μm)) μm is not entirely within imghp.PSF_zlb_μm/PSF_zub_μm")
     system_params.is_T_background_within_object_Textent || push!(warnings,
