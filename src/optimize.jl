@@ -205,7 +205,7 @@ end
 # rather than waiting for the first checkpoint: unlike geoms/α/β/history, these never change over
 # the course of the run, so there's no reason to defer writing them, and writing them this early
 # means params.txt still exists even if the job dies before its first checkpoint. system_params
-# is the caller's own already-computed compute_system_parameters(php, imghp) result (src/prepare.jl)
+# is the caller's own already-computed compute_system_parameters(php, imghp, rechp) result (src/prepare.jl)
 # -- passed in rather than recomputed here, since it's cheap but the caller has already computed
 # and printed it once (e.g. endtoend_opt.jl, right after php/imghp/opthp/rechp are built).
 #

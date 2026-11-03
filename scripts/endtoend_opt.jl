@@ -99,7 +99,7 @@ for (label, x) in ((:php, php), (:imghp, imghp), (:opthp, opthp), (:rechp, rechp
 end
 
 println("\n--- system params ---")
-@time system_params = End2EndThermalImg.compute_system_parameters(php, imghp)
+@time system_params = End2EndThermalImg.compute_system_parameters(php, imghp, rechp)
 
 println("\n--- setup ---")
 @time driver_plans_n2f, driver_plans_PSF = End2EndThermalImg.setup_fft_plans_distributed!(php, imghp)

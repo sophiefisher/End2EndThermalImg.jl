@@ -88,7 +88,7 @@ end
 # --- One-time setup, not included in any of the timings below ---
 
 println("\n--- setup (not timed) ---")
-@time End2EndThermalImg.compute_system_parameters(php, imghp)
+@time End2EndThermalImg.compute_system_parameters(php, imghp, rechp)
 @time driver_plans_n2f, driver_plans_PSF = End2EndThermalImg.setup_fft_plans_distributed!(php, imghp)
 @time freqs = End2EndThermalImg.get_freq_chebpoints(php)
 @time n2f_kernels = End2EndThermalImg.compute_and_broadcast(:n2f_kernels, End2EndThermalImg.get_n2f_kernels, freqs, driver_plans_n2f, php, imghp)

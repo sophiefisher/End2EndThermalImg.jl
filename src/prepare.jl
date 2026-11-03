@@ -472,6 +472,12 @@ get_object_zextent(object_type::GaussianObject) = (object_type.zlb_μm, object_t
 get_object_zextent(object_type::UniformlyRandomObject) = (object_type.zlb_μm, object_type.zub_μm)
 get_object_zextent(object_type::UniformlyRandomTFixedDepthObject) = (object_type.z_μm, object_type.z_μm)
 
+# (Tlb, Tub) spanning where this object_type actually places T values -- one generic method (not
+# dispatched per subtype like get_object_zextent) since every AbstractObjectType subtype stores
+# this the same way, as a literal (Tlb, Tub) pair with the same convex-combination argument as
+# get_object_zextent's GaussianObject case applying here too.
+get_object_Textent(object_type::AbstractObjectType) = (object_type.Tlb, object_type.Tub)
+
 # Deterministic seed derived from (php, imghp) -- the same values always hash to the same seed
 # (confirmed: Julia's default struct hash is fieldwise/value-based, not objectid-based, so this is
 # stable across separate Julia processes/job submissions, not just within one).
@@ -535,7 +541,7 @@ prepare_image_buf(imghp) = Array{Float64}(undef, imghp.imgN, imghp.imgN)
 # as the job hyperparameters themselves, for a consistent log format. The returned NamedTuple is
 # also threaded through to write_params_summary by callers that want it recorded in params.txt
 # (e.g. run_and_save_outer_optimization_distributed, src/optimize.jl).
-function compute_system_parameters(php::PhysicsHyperParams, imghp::ImagingHyperParams)
+function compute_system_parameters(php::PhysicsHyperParams, imghp::ImagingHyperParams, rechp::ReconstructionHyperParams)
     image_pixel_size_μm = imghp.binN * php.unit_cell_length_μm
     image_size_μm = image_pixel_size_μm * imghp.imgN
     metasurface_size_μm = php.unit_cell_length_μm * php.num_unit_cells
@@ -580,11 +586,23 @@ function compute_system_parameters(php::PhysicsHyperParams, imghp::ImagingHyperP
     object_zlb_μm, object_zub_μm = get_object_zextent(imghp.object_type)
     is_object_within_PSF_bounds = object_zlb_μm >= imghp.PSF_zlb_μm && object_zub_μm <= imghp.PSF_zub_μm
 
+    # Reconstruction-initialization checks: rechp.T_background/z_middle_μm should lie within (and,
+    # ideally but not strictly necessarily, at the midpoint of) the object's own T/z extent -- the
+    # midpoint is the natural unbiased starting guess, so being off-center is worth flagging even
+    # though it isn't necessarily wrong.
+    object_Tlb, object_Tub = get_object_Textent(imghp.object_type)
+    is_T_background_within_object_Textent = object_Tlb <= rechp.T_background <= object_Tub
+    is_T_background_at_midpoint = isapprox(rechp.T_background, (object_Tlb + object_Tub) / 2)
+    is_z_middle_within_object_zextent = object_zlb_μm <= rechp.z_middle_μm <= object_zub_μm
+    is_z_middle_at_midpoint = isapprox(rechp.z_middle_μm, (object_zlb_μm + object_zub_μm) / 2)
+
     system_params = (; image_pixel_size_μm, image_size_μm, metasurface_size_μm, metasurface_size_cm,
                         NA, f_number, FOV_degrees, λmid_μm, difflim_λlb_μm, difflim_λmid_μm, difflim_λub_μm,
                         n_object_pixels, n_image_pixels, overdetermination_ratio, is_overdetermined,
                         z_min_μm, paraxial_ratio, is_paraxial, max_phase_error_rad, is_farfield,
-                        object_zlb_μm, object_zub_μm, is_object_within_PSF_bounds)
+                        object_zlb_μm, object_zub_μm, is_object_within_PSF_bounds,
+                        object_Tlb, object_Tub, is_T_background_within_object_Textent, is_T_background_at_midpoint,
+                        is_z_middle_within_object_zextent, is_z_middle_at_midpoint)
     write_param_lines(stdout, :system_params, system_params)
     for w in system_param_warnings(system_params)
         @warn w
@@ -605,5 +623,13 @@ function system_param_warnings(system_params)
         "object illumination is not sufficiently far-field/plane-wave-like (max_phase_error_rad = $(system_params.max_phase_error_rad) ≥ π/8)")
     system_params.is_object_within_PSF_bounds || push!(warnings,
         "object z-extent ($(system_params.object_zlb_μm), $(system_params.object_zub_μm)) μm is not entirely within imghp.PSF_zlb_μm/PSF_zub_μm")
+    system_params.is_T_background_within_object_Textent || push!(warnings,
+        "rechp.T_background is not within the object's T-extent ($(system_params.object_Tlb), $(system_params.object_Tub))")
+    system_params.is_T_background_at_midpoint || push!(warnings,
+        "rechp.T_background is not at the midpoint of the object's T-extent ($(system_params.object_Tlb), $(system_params.object_Tub)) -- not strictly required, but is the natural unbiased starting guess")
+    system_params.is_z_middle_within_object_zextent || push!(warnings,
+        "rechp.z_middle_μm is not within the object's z-extent ($(system_params.object_zlb_μm), $(system_params.object_zub_μm)) μm")
+    system_params.is_z_middle_at_midpoint || push!(warnings,
+        "rechp.z_middle_μm is not at the midpoint of the object's z-extent ($(system_params.object_zlb_μm), $(system_params.object_zub_μm)) μm -- not strictly required, but is the natural unbiased starting guess")
     warnings
 end
