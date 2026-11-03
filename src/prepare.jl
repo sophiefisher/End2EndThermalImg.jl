@@ -463,6 +463,15 @@ function get_object(imghp::ImagingHyperParams)
     get_object(imghp.object_type, imghp)
 end
 
+# (zlb_μm, zub_μm) spanning where this object_type actually places z values, used by
+# compute_system_parameters to check that this lies within imghp.PSF_zlb_μm/PSF_zub_μm. For
+# GaussianObject, despite the field names (an offset and a peak, not literal bounds), the sampled
+# zmap = zlb + (zub-zlb)*exp(-...) is a convex combination of the two (exp(...) ∈ (0,1]), so it
+# never leaves [zlb_μm, zub_μm] either -- same bound as the uniform case, for a different reason.
+get_object_zextent(object_type::GaussianObject) = (object_type.zlb_μm, object_type.zub_μm)
+get_object_zextent(object_type::UniformlyRandomObject) = (object_type.zlb_μm, object_type.zub_μm)
+get_object_zextent(object_type::UniformlyRandomTFixedDepthObject) = (object_type.z_μm, object_type.z_μm)
+
 # Deterministic seed derived from (php, imghp) -- the same values always hash to the same seed
 # (confirmed: Julia's default struct hash is fieldwise/value-based, not objectid-based, so this is
 # stable across separate Julia processes/job submissions, not just within one).
@@ -565,10 +574,17 @@ function compute_system_parameters(php::PhysicsHyperParams, imghp::ImagingHyperP
     max_phase_error_rad = π * metasurface_size_μm^2 / (4 * php.λlb_μm * z_min_μm)
     is_farfield = max_phase_error_rad < π / 8
 
+    # Object-extent check: imghp.object_type's own z-extent (get_object_zextent, dispatched per
+    # object_type) should lie entirely within imghp.PSF_zlb_μm/PSF_zub_μm -- otherwise part of the
+    # object is placed outside the z-range the PSFs are actually sampled over.
+    object_zlb_μm, object_zub_μm = get_object_zextent(imghp.object_type)
+    is_object_within_PSF_bounds = object_zlb_μm >= imghp.PSF_zlb_μm && object_zub_μm <= imghp.PSF_zub_μm
+
     system_params = (; image_pixel_size_μm, image_size_μm, metasurface_size_μm, metasurface_size_cm,
                         NA, f_number, FOV_degrees, λmid_μm, difflim_λlb_μm, difflim_λmid_μm, difflim_λub_μm,
                         n_object_pixels, n_image_pixels, overdetermination_ratio, is_overdetermined,
-                        z_min_μm, paraxial_ratio, is_paraxial, max_phase_error_rad, is_farfield)
+                        z_min_μm, paraxial_ratio, is_paraxial, max_phase_error_rad, is_farfield,
+                        object_zlb_μm, object_zub_μm, is_object_within_PSF_bounds)
     write_param_lines(stdout, :system_params, system_params)
     for w in system_param_warnings(system_params)
         @warn w
@@ -587,5 +603,7 @@ function system_param_warnings(system_params)
         "paraxial approximation does not hold (paraxial_ratio = $(system_params.paraxial_ratio) ≥ 0.1): max_phase_error_rad/is_farfield may not be reliable")
     system_params.is_farfield || push!(warnings,
         "object illumination is not sufficiently far-field/plane-wave-like (max_phase_error_rad = $(system_params.max_phase_error_rad) ≥ π/8)")
+    system_params.is_object_within_PSF_bounds || push!(warnings,
+        "object z-extent ($(system_params.object_zlb_μm), $(system_params.object_zub_μm)) μm is not entirely within imghp.PSF_zlb_μm/PSF_zub_μm")
     warnings
 end
