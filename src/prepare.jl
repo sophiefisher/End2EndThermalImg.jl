@@ -550,9 +550,22 @@ function compute_system_parameters(php::PhysicsHyperParams, imghp::ImagingHyperP
     overdetermination_ratio = n_image_pixels / n_object_pixels
     is_overdetermined = overdetermination_ratio > 1
 
+    # Plane-wave / far-field check: each object point illuminates the metasurface as an exact
+    # spherical wave (see efield_point_source in forward.jl); the worst case (largest deviation
+    # from a plane wave) is the closest point in z and the shortest wavelength. max_phase_error_rad
+    # is the paraxial/Fresnel quadratic phase term, valid only when paraxial_ratio (= tan of the
+    # half-angle the aperture subtends from the object point) is itself small -- is_paraxial gates
+    # whether max_phase_error_rad/is_farfield can be trusted at all.
+    z_min_μm = min(abs(imghp.PSF_zlb_μm), abs(imghp.PSF_zub_μm))
+    paraxial_ratio = (metasurface_size_μm / 2) / z_min_μm
+    is_paraxial = paraxial_ratio < 0.1
+    max_phase_error_rad = π * metasurface_size_μm^2 / (4 * php.λlb_μm * z_min_μm)
+    is_farfield = max_phase_error_rad < π / 8
+
     system_params = (; image_pixel_size_μm, image_size_μm, metasurface_size_μm, metasurface_size_cm,
                         NA, f_number, FOV_degrees, λmid_μm, difflim_λlb_μm, difflim_λmid_μm, difflim_λub_μm,
-                        n_object_pixels, n_image_pixels, overdetermination_ratio, is_overdetermined)
+                        n_object_pixels, n_image_pixels, overdetermination_ratio, is_overdetermined,
+                        z_min_μm, paraxial_ratio, is_paraxial, max_phase_error_rad, is_farfield)
     write_param_lines(stdout, :system_params, system_params)
     system_params
 end
