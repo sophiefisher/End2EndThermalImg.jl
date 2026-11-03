@@ -367,6 +367,9 @@ function write_params_summary(filepath, php, imghp, opthp, rechp, system_params,
         write_param_lines(io, :rechp, rechp)
         println(io)
         write_param_lines(io, :system_params, system_params)
+        for w in system_param_warnings(system_params)
+            println(io, "WARNING: ", w)
+        end
         println(io)
         write_param_lines(io, :PSF_scale, PSF_scale)
     end
@@ -567,5 +570,22 @@ function compute_system_parameters(php::PhysicsHyperParams, imghp::ImagingHyperP
                         n_object_pixels, n_image_pixels, overdetermination_ratio, is_overdetermined,
                         z_min_μm, paraxial_ratio, is_paraxial, max_phase_error_rad, is_farfield)
     write_param_lines(stdout, :system_params, system_params)
+    for w in system_param_warnings(system_params)
+        @warn w
+    end
     system_params
+end
+
+# Human-readable messages for any system_params condition (computed by compute_system_parameters)
+# that doesn't hold -- shared between the log (compute_system_parameters, via @warn) and params.txt
+# (write_params_summary, via plain println) so the conditions/wording can't drift between the two.
+function system_param_warnings(system_params)
+    warnings = String[]
+    system_params.is_overdetermined || push!(warnings,
+        "system is not overdetermined (overdetermination_ratio = $(system_params.overdetermination_ratio) ≤ 1): more object unknowns than sensor measurements")
+    system_params.is_paraxial || push!(warnings,
+        "paraxial approximation does not hold (paraxial_ratio = $(system_params.paraxial_ratio) ≥ 0.1): max_phase_error_rad/is_farfield may not be reliable")
+    system_params.is_farfield || push!(warnings,
+        "object illumination is not sufficiently far-field/plane-wave-like (max_phase_error_rad = $(system_params.max_phase_error_rad) ≥ π/8)")
+    warnings
 end
