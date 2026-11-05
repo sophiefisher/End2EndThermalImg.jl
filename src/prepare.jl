@@ -573,12 +573,26 @@ function compute_system_parameters(php::PhysicsHyperParams, imghp::ImagingHyperP
     # from a plane wave) is the closest point in z and the shortest wavelength. max_phase_error_rad
     # is the paraxial/Fresnel quadratic phase term, valid only when paraxial_ratio (= tan of the
     # half-angle the aperture subtends from the object point) is itself small -- is_paraxial gates
-    # whether max_phase_error_rad/is_farfield can be trusted at all.
+    # whether max_phase_error_rad/is_farfield (and min_phase_error_rad/is_not_farfield, below) can
+    # be trusted at all.
     z_min_μm = min(abs(imghp.PSF_zlb_μm), abs(imghp.PSF_zub_μm))
+    z_max_μm = max(abs(imghp.PSF_zlb_μm), abs(imghp.PSF_zub_μm))
     paraxial_ratio = (metasurface_size_μm / 2) / z_min_μm
     is_paraxial = paraxial_ratio < 0.1
     max_phase_error_rad = π * metasurface_size_μm^2 / (4 * php.λlb_μm * z_min_μm)
     is_farfield = max_phase_error_rad < π / 8
+
+    # Depth-distinguishability check: we need the OPPOSITE of the far-field check above to hold at
+    # every sampled depth -- if any depth is far enough to look like a plane wave, it becomes
+    # indistinguishable from every other far depth, which defeats the whole point of 3D imaging.
+    # The farthest sampled depth (z_max_μm) is the one closest to the far-field limit (least
+    # curvature), so it's the only one that needs checking: if it isn't far-field, nothing nearer is
+    # either. Same reasoning for wavelength, but inverted: max_phase_error_rad/is_farfield use
+    # λlb_μm because that's the worst case for a "< π/8" bound (shortest wavelength -> largest phase
+    # error); min_phase_error_rad needs the worst case for a "> π/8" bound instead, which is the
+    # longest wavelength (λub_μm, smallest phase error).
+    min_phase_error_rad = π * metasurface_size_μm^2 / (4 * php.λub_μm * z_max_μm)
+    is_not_farfield = min_phase_error_rad > π / 8
 
     # Locally-periodic-approximation (LPA) check: get_near_field (forward.jl) computes the
     # transmitted field as incident_field .* surrogate.(geoms) -- i.e. each unit cell's transmission
@@ -611,7 +625,8 @@ function compute_system_parameters(php::PhysicsHyperParams, imghp::ImagingHyperP
     system_params = (; image_pixel_size_μm, image_size_μm, metasurface_size_μm, metasurface_size_cm,
                         NA, f_number, FOV_degrees, λmid_μm, difflim_λlb_μm, difflim_λmid_μm, difflim_λub_μm,
                         n_object_pixels, n_image_pixels, overdetermination_ratio, is_overdetermined,
-                        z_min_μm, paraxial_ratio, is_paraxial, max_phase_error_rad, is_farfield,
+                        z_min_μm, z_max_μm, paraxial_ratio, is_paraxial, max_phase_error_rad, is_farfield,
+                        min_phase_error_rad, is_not_farfield,
                         max_phase_error_per_cell_rad, is_LPA_valid,
                         object_zlb_μm, object_zub_μm, is_object_within_PSF_bounds,
                         object_Tlb, object_Tub, is_T_background_within_object_Textent, is_T_background_at_midpoint,
@@ -631,9 +646,9 @@ function system_param_warnings(system_params)
     system_params.is_overdetermined || push!(warnings,
         "system is not overdetermined (overdetermination_ratio = $(system_params.overdetermination_ratio) ≤ 1): more object unknowns than sensor measurements")
     system_params.is_paraxial || push!(warnings,
-        "paraxial approximation does not hold (paraxial_ratio = $(system_params.paraxial_ratio) ≥ 0.1): max_phase_error_rad/is_farfield may not be reliable")
-    system_params.is_farfield || push!(warnings,
-        "object illumination is not sufficiently far-field/plane-wave-like (max_phase_error_rad = $(system_params.max_phase_error_rad) ≥ π/8)")
+        "paraxial approximation does not hold (paraxial_ratio = $(system_params.paraxial_ratio) ≥ 0.1): max_phase_error_rad/is_farfield and min_phase_error_rad/is_not_farfield may not be reliable")
+    system_params.is_not_farfield || push!(warnings,
+        "object illumination is too far-field/plane-wave-like at the farthest sampled depth (min_phase_error_rad = $(system_params.min_phase_error_rad) ≤ π/8): different depths may be indistinguishable to the metasurface")
     system_params.is_LPA_valid || push!(warnings,
         "locally-periodic approximation does not hold (max_phase_error_per_cell_rad = $(system_params.max_phase_error_per_cell_rad) ≥ π/8): get_near_field's per-cell surrogate lookup may not be accurate")
     system_params.is_object_within_PSF_bounds || push!(warnings,
