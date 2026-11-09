@@ -45,12 +45,15 @@ function d2g_δ_dz2(z, smoothness_order)
     (dN_dz*D - 2*N*dD_dz)/D^3
 end
 
+# derivatives of δ_Δz (get_discretized_δ_function, forward.jl) w.r.t. z, holding Δz fixed. Matches
+# δ_Δz's partition-of-unity normalization (no extra (1/Δz) factor) -- dropped one overall (1/Δz)
+# multiplier relative to the discretized-Dirac-delta convention this used to follow.
 function dδ_dz(z, smoothness_order, Δz)
-    (1/Δz)*((-1/Δz)*dg_δ_dz(z/Δz, smoothness_order) + (1/Δz)*dg_δ_dz(-z/Δz, smoothness_order))
+    (-1/Δz)*dg_δ_dz(z/Δz, smoothness_order) + (1/Δz)*dg_δ_dz(-z/Δz, smoothness_order)
 end
 
 function d2δ_dz2(z, smoothness_order, Δz)
-    (1/Δz)*((-1/Δz^2)*d2g_δ_dz2(z/Δz, smoothness_order) + (-1/Δz^2)*d2g_δ_dz2(-z/Δz, smoothness_order))
+    (-1/Δz^2)*d2g_δ_dz2(z/Δz, smoothness_order) + (-1/Δz^2)*d2g_δ_dz2(-z/Δz, smoothness_order)
 end
 
 function dC_dz(z, PSF_zcoord, smoothness_order, Δz)

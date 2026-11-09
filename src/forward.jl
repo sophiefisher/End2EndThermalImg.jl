@@ -301,10 +301,16 @@ function f_δ(z, smoothness_order)
     end
 end
 
-# smoothness_order = 0 yields the triangle function
+# smoothness_order = 0 yields the triangle function. Normalized as a partition of unity (the two
+# bracketing nodes' weights sum to 1 for any z between them), not as a discretized Dirac delta
+# (which would carry an extra (1/Δz) factor here, requiring every caller that sums C_interp_3D/
+# dC_dz/d2C_dz2 over PSF_zcoords to multiply back by Δz to recover a normalized interpolation --
+# previously missing everywhere, which silently scaled formed images and adjoint/Hessian
+# quantities by (roughly) the number of PSF_zcoords. Keeping the (1/Δz) out of here instead makes
+# every downstream site correct automatically, with nothing else to touch.
 function get_discretized_δ_function(smoothness_order, Δz)
     g = z -> f_δ(z, smoothness_order) / ( f_δ(z, smoothness_order) + f_δ(1-z, smoothness_order) )
-    δ = z -> (-g(z ./ Δz) - g(-z ./ Δz) + 1) .* (1/Δz)
+    δ = z -> (-g(z ./ Δz) - g(-z ./ Δz) + 1)
     δ
 end
 
