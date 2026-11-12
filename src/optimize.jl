@@ -276,14 +276,16 @@ function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weigh
     PSFs_initial = gather_PSFs_distributed(geoms, freqs, php, imghp, PSF_scale, driver_plans_PSF, PSF_zcoords)
     noisy_image_initial = make_noisy_image_from_3D_distributed(test_object, weights, test_noise, imghp.noise_type, php, imghp)
     result_initial = reconstruct_Tmap_and_zmap_distributed(noisy_image_initial, weights, α, β, jhp; objective_scale = :auto)
+    image_opt_initial = make_image_from_3D_distributed(result_initial.object_opt, weights, php, imghp)
     plot_geoms(geoms_init_flat, php; savefile = "$(run_folder)/geoms_initial.png")
-    plot_reconstruction_results(test_object, result_initial.object_opt;
+    plot_reconstruction_results(test_object, result_initial.object_opt, noisy_image_initial, image_opt_initial;
         extra_title = "initial state: α = $α, β = $β", savefile = "$(run_folder)/reconstruction_initial.png")
 
     for (name, (obj, noise)) in extra_draws
         noisy_image = make_noisy_image_from_3D_distributed(obj, weights, noise, imghp.noise_type, php, imghp)
         result = reconstruct_Tmap_and_zmap_distributed(noisy_image, weights, α, β, jhp; objective_scale = :auto)
-        plot_reconstruction_results(obj, result.object_opt;
+        image_opt = make_image_from_3D_distributed(result.object_opt, weights, php, imghp)
+        plot_reconstruction_results(obj, result.object_opt, noisy_image, image_opt;
             extra_title = "$name | initial state: α = $α, β = $β", savefile = "$(run_folder)/reconstruction_initial_$(name).png")
     end
 
@@ -295,14 +297,16 @@ function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weigh
     PSFs_final = gather_PSFs_distributed(out.geoms, freqs, php, imghp, PSF_scale, driver_plans_PSF, PSF_zcoords)
     noisy_image_final = make_noisy_image_from_3D_distributed(test_object, weights, test_noise, imghp.noise_type, php, imghp)
     result_final = reconstruct_Tmap_and_zmap_distributed(noisy_image_final, weights, out.α, out.β, jhp; objective_scale = :auto)
+    image_opt_final = make_image_from_3D_distributed(result_final.object_opt, weights, php, imghp)
     plot_geoms(geoms_final_flat, php; savefile = "$(run_folder)/geoms_final.png")
-    plot_reconstruction_results(test_object, result_final.object_opt;
+    plot_reconstruction_results(test_object, result_final.object_opt, noisy_image_final, image_opt_final;
         extra_title = "final state: α = $(out.α), β = $(out.β)", savefile = "$(run_folder)/reconstruction_final.png")
 
     for (name, (obj, noise)) in extra_draws
         noisy_image = make_noisy_image_from_3D_distributed(obj, weights, noise, imghp.noise_type, php, imghp)
         result = reconstruct_Tmap_and_zmap_distributed(noisy_image, weights, out.α, out.β, jhp; objective_scale = :auto)
-        plot_reconstruction_results(obj, result.object_opt;
+        image_opt = make_image_from_3D_distributed(result.object_opt, weights, php, imghp)
+        plot_reconstruction_results(obj, result.object_opt, noisy_image, image_opt;
             extra_title = "$name | final state: α = $(out.α), β = $(out.β)", savefile = "$(run_folder)/reconstruction_final_$(name).png")
     end
 

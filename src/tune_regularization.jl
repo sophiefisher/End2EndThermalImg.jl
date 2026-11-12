@@ -274,13 +274,17 @@ function save_tune_regularization_state(run_folder, tune_out, α_start, β_start
         log_scale = true, savefile = "$(tune_folder)/alpha_beta_history.png")
     plot_objective_function_history([h.L for h in history]; savefile = "$(tune_folder)/loss_history.png")
 
+    noisy_image = make_noisy_image_from_3D_distributed(object, weights, noise, imghp.noise_type, php, imghp)
+
     r_init = reconstruction_error_and_grad(object, noise, α_start, β_start, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp)
-    plot_reconstruction_results(object, r_init.object_opt;
+    image_opt_init = make_image_from_3D_distributed(r_init.object_opt, weights, php, imghp)
+    plot_reconstruction_results(object, r_init.object_opt, noisy_image, image_opt_init;
         extra_title = "α = $α_start, β = $β_start  (initial, before tuning).  n_active_T=$(r_init.n_active_T), n_active_z=$(r_init.n_active_z)",
         savefile = "$(tune_folder)/reconstruction_initial.png")
 
     cache_note = cache_hit ? "cache hit: $cache_source" : "freshly resolved"
-    plot_reconstruction_results(object, object_opt;
+    image_opt_resolved = make_image_from_3D_distributed(object_opt, weights, php, imghp)
+    plot_reconstruction_results(object, object_opt, noisy_image, image_opt_resolved;
         extra_title = "α = $α, β = $β  (resolved, $cache_note).  n_active_T=$n_active_T, n_active_z=$n_active_z",
         savefile = "$(tune_folder)/reconstruction_resolved.png")
 

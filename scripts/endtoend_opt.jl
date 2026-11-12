@@ -17,8 +17,10 @@ println("nworkers = ", nworkers(), "  workers = ", workers())
 println("driver threads = ", Threads.nthreads())
 println("threads per worker = ", [remotecall_fetch(Threads.nthreads, p) for p in workers()])
 
-# Same hyperparameters used throughout jupyter_notebooks/2026-10-19-run-optimization.ipynb and
-# scripts/time_pipeline.jl.
+# Shares most hyperparameters with jupyter_notebooks/2026-10-19-run-optimization.ipynb and
+# scripts/time_pipeline.jl, but freq_order/PSF_zlen are now the converged production values (40/9,
+# from scripts/frequency_order_convergence.jl and scripts/psf_zlen_convergence.jl's sweeps) rather
+# than those files' own (20/3) -- not yet ported back to either of those.
 #
 # α_init/β_init default to :auto (resolve_initial_α_β runs first, see src/tune_regularization.jl)
 # -- override both via E2E_ALPHA_INIT/E2E_BETA_INIT env vars to fix them at a literal value
@@ -32,7 +34,7 @@ parse_αβ_init(s) = s == "auto" ? :auto : parse(Float64, s)
     php = PhysicsHyperParams(
         λlb_μm = 8.0,
         λub_μm = 12.0,
-        freq_order = 20,
+        freq_order = 40,
         focal_length_μm = 2.0e4,
         num_unit_cells = 2048,
         unit_cell_length_μm = 4.0,
@@ -55,19 +57,21 @@ parse_αβ_init(s) = s == "auto" ? :auto : parse(Float64, s)
         sampleN = 1,
         PSF_zlb_μm = -2.1e6,
         PSF_zub_μm = -0.9e6,
-        PSF_zlen = 3,
+        PSF_zlen = 9,
         smoothness_order = 3.0,
         object_type = UniformlyRandomObject(Tlb = 136.15, Tub = 450.15, zlb_μm = -2.0e6, zub_μm = -1.0e6, zlen = 7, php = php),
-        noise_type = RelativeNoise(0.2),
+        noise_type = RelativeNoise(0.02),
         php = php
     )
 
     opthp = OptimizeHyperParams(
         geoms_init_type = "monochromatic",
-        maxeval = 10,          # outer (geoms, α, β) iterations -- small test run for now
+        maxeval = 2000,        # outer (geoms, α, β) iterations
         learning_rate = 1e-3,
-        save_every = 3         # checkpoint interval; smaller than maxeval here so this test run
-                                # actually exercises periodic checkpointing, not just the final save
+        save_every = 50        # checkpoint interval -- 40 checkpoints over the run; xeon-p8's
+                                # 4-day-4-hour time limit gives plenty of margin at this cadence,
+                                # so this is sized for convergence-monitoring granularity, not
+                                # minimizing lost work from a timeout
     )
 
     rechp = ReconstructionHyperParams(

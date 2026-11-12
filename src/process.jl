@@ -221,7 +221,14 @@ function image_axis!(ax)
     ax.set_yticks(Float64[])
 end
 
-function plot_reconstruction_results(object, object_opt;
+# noisy_image/image_opt: the actual (noisy) measurement the reconstruction was fit against, and the
+# noiseless image make_image_from_3D_distributed forms from object_opt -- i.e. exactly the two
+# quantities reconstruction_objective_distributed's data-misfit term compares (src/forward_distributed.jl):
+# error_image = sum((image .- noisy_image) .^ 2), evaluated there at a general trial object and here
+# at the optimum object_opt. The third row's error panel is that same squared difference, so its
+# displayed sum is exactly the data-misfit component of L at object_opt (not the regularization
+# terms, which depend on α/β and T_background/z_middle rather than only on the images).
+function plot_reconstruction_results(object, object_opt, noisy_image, image_opt;
                                      figsize_x = DEFAULT_FIGSIZE_X,
                                      figsize_y = DEFAULT_FIGSIZE_Y,
                                      fontsize = 10,
@@ -229,7 +236,7 @@ function plot_reconstruction_results(object, object_opt;
                                      savefile = "")
 
     matplotlib.rcParams["font.size"] = fontsize
-    fig, ax = subplots(2, 3, figsize=(3*figsize_x, 2*figsize_y))
+    fig, ax = subplots(3, 3, figsize=(3*figsize_x, 3*figsize_y))
 
     Tmin = minimum(object.Tmap)
     Tmax = maximum(object.Tmap)
@@ -280,6 +287,32 @@ function plot_reconstruction_results(object, object_opt;
     ax[1,2].set_title("per-pixel relative error (%)\nrelative L2 error: $(round(100*relerr_z, digits=2))%")
     fig.colorbar(im12, ax=ax[1,2], label="%")
     image_axis!(ax[1,2])
+
+    # formed-image comparison: noisy_image is the actual data the reconstruction was fit against;
+    # image_opt is the noiseless image make_image_from_3D_distributed forms from object_opt. Shared
+    # color scale between the two (like Tmin/Tmax, zmin/zmax above) so they're visually comparable.
+    image_min = min(minimum(noisy_image), minimum(image_opt))
+    image_max = max(maximum(noisy_image), maximum(image_opt))
+
+    im20 = ax[2,0].imshow(noisy_image, cmap = "viridis", vmin = image_min, vmax = image_max)
+    ax[2,0].set_title(L"$I_{meas}(x,y)$ [measured, noisy]")
+    fig.colorbar(im20, ax=ax[2,0], label="intensity")
+    image_axis!(ax[2,0])
+
+    im21 = ax[2,1].imshow(image_opt, cmap = "viridis", vmin = image_min, vmax = image_max)
+    ax[2,1].set_title(L"$I_{pred}(x,y)$ [from reconstructed object]")
+    fig.colorbar(im21, ax=ax[2,1], label="intensity")
+    image_axis!(ax[2,1])
+
+    # (I_pred - I_meas)^2 is exactly the per-pixel summand of reconstruction_objective_distributed's
+    # data-misfit term (src/forward_distributed.jl) -- its sum here is that term's actual value at
+    # object_opt, not merely "an" error metric.
+    squared_error_image = (image_opt .- noisy_image) .^ 2
+    data_misfit = sum(squared_error_image)
+    im22 = ax[2,2].imshow(squared_error_image, cmap = "viridis")
+    ax[2,2].set_title(L"$(I_{pred} - I_{meas})^2$" * "\ndata-misfit term: $(round(data_misfit, sigdigits=4))")
+    fig.colorbar(im22, ax=ax[2,2], label="intensity²")
+    image_axis!(ax[2,2])
 
     fig.text(0.5, 1.05, "$(extra_title)", ha="center", va="top", transform=fig.transFigure, fontsize = fontsize + 2)
     fig.tight_layout()
