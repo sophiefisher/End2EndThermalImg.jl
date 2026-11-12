@@ -6,7 +6,7 @@ module End2EndThermalImg
 
     # prepare.jl
     export PhysicsHyperParams, ImagingHyperParams, OptimizeHyperParams, ReconstructionHyperParams, JobHyperParams
-    export UniformlyRandomObject, UniformlyRandomTFixedDepthObject, GaussianObject
+    export UniformlyRandomObject, UniformlyRandomTFixedDepthObject, GaussianObject, LoadedObject
     export FixedNoise, RelativeNoise, apply_noise
     export flatten_object, get_wavcen
 
@@ -18,6 +18,7 @@ module End2EndThermalImg
 
     using CSV
     using DataFrames
+    using DelimitedFiles
     using Interpolations
     using FastChebInterp
     using Parameters

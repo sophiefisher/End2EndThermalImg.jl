@@ -136,10 +136,37 @@ PSF_scale = End2EndThermalImg.choose_PSF_scale(image_reference, reference_scale;
 println("chosen PSF_scale = ", PSF_scale, "  (mean(image) at reference_scale=1.0 was ", mean(image_reference), ")")
 End2EndThermalImg.update_geoms_and_fftPSFs!(geoms, freqs, php, imghp, PSF_scale)
 
+# Two human-readable test objects, reconstructed before and after geoms optimization alongside
+# the main (randomly-drawn) test_object, purely for visual/qualitative inspection -- neither feeds
+# back into the training loop itself (that still only ever draws from imghp.object_type). Both
+# reuse imghp.object_type's own Tlb/Tub/zlb_μm/zub_μm (via get_object_Textent/get_object_zextent)
+# rather than picking fresh bounds, so their extents are automatically within whatever
+# compute_system_parameters already validated for the training distribution -- nothing new to
+# bound-check.
+Tlb, Tub = End2EndThermalImg.get_object_Textent(imghp.object_type)
+zlb_μm, zub_μm = End2EndThermalImg.get_object_zextent(imghp.object_type)
+
+mit_object_type = LoadedObject(
+    Tmap_path = "objdata/MIT$(imghp.objN).csv",
+    zmap_path = "objdata/MIT$(imghp.objN)_zmap.csv",
+    Tlb = Tlb, Tub = Tub, zlb_μm = zlb_μm, zub_μm = zub_μm,
+    php = php
+)
+# std_dev_T/std_dev_z are evaluated against raw pixel-index coordinates (gaussian_2D, src/prepare.jl),
+# not physical Kelvin/μm units despite the field names -- objN/4 gives a visible falloff across the
+# objN x objN grid (confirmed: (Tub-Tlb)/2 was tried first and made the bump nearly flat, varying
+# by <1% across the whole image, since it's enormously larger than the pixel-index coordinate range).
+gaussian_object_type = GaussianObject(
+    Tlb = Tlb, Tub = Tub, std_dev_T = imghp.objN / 4,
+    zlb_μm = zlb_μm, zub_μm = zub_μm, std_dev_z = imghp.objN / 4,
+    php = php
+)
+extra_test_objects = ["MIT" => mit_object_type, "Gaussian" => gaussian_object_type]
+
 println("\n--- running outer optimization (", opthp.maxeval, " iterations) ---")
 out = End2EndThermalImg.run_and_save_outer_optimization_distributed(
     geoms, rechp.α_init, rechp.β_init, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp, PSF_scale, system_params;
-    verbose = true
+    verbose = true, extra_test_objects = extra_test_objects
 )
 
 println("\n=== Done ===")

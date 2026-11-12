@@ -228,8 +228,20 @@ end
 # src/forward_distributed.jl, recomputes and gathers them fresh each time); neither PSFs nor the
 # reconstruction object_opts are persisted to results.jld2, since both are cheap to regenerate from
 # the already-saved geoms_init_flat/geoms_opt_flat later if needed.
+#
+# extra_test_objects: additional named (name => object_type) pairs -- e.g. a human-readable test
+# object (a logo, GaussianObject) distinct from imghp.object_type's own training distribution --
+# each gets the exact same initial/final reconstruction treatment as test_object above, saved as
+# reconstruction_{initial,final}_<name>.png. Every one of these object_types is deterministic
+# (loaded from a file, or a closed-form formula -- no call to rand() either way), so the only
+# actual randomness per extra test object is its noise draw; that still goes through
+# with_tuning_rng, tagged with `name`, so it stays reproducible across separate job submissions
+# with the same (php, imghp) while not colliding with test_object's own draw or with each other (an
+# untagged draw would make every one of them issue the identical first randn! call right after an
+# identical reseed, since none of them consume any randomness drawing the object itself the way
+# test_object's own get_object(imghp) call does -- see with_tuning_rng's tagged overload, src/prepare.jl).
 function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp::JobHyperParams, PSF_scale, system_params;
-    verbose = true)
+    verbose = true, extra_test_objects::Vector{<:Pair{String, <:AbstractObjectType}} = Pair{String, AbstractObjectType}[])
     @unpack php, imghp, rechp, opthp = jhp
     root = ensure_optdata_folder()
     datetime = now()
@@ -252,6 +264,13 @@ function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weigh
         (get_object(imghp), generate_noise(imghp))
     end
 
+    # each extra named test object gets its own (object, noise) pair, drawn once up front (same
+    # reason as test_object above) and reused for both the initial and final reconstruction below.
+    extra_draws = [name => with_tuning_rng(php, imghp, name) do
+                       (get_object(object_type, imghp), generate_noise(imghp))
+                   end
+                   for (name, object_type) in extra_test_objects]
+
     verbose && @info "Computing initial-state geoms/PSFs/reconstruction comparison artifacts"
     geoms_init_flat = vec(geoms)
     PSFs_initial = gather_PSFs_distributed(geoms, freqs, php, imghp, PSF_scale, driver_plans_PSF, PSF_zcoords)
@@ -260,6 +279,13 @@ function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weigh
     plot_geoms(geoms_init_flat, php; savefile = "$(run_folder)/geoms_initial.png")
     plot_reconstruction_results(test_object, result_initial.object_opt;
         extra_title = "initial state: α = $α, β = $β", savefile = "$(run_folder)/reconstruction_initial.png")
+
+    for (name, (obj, noise)) in extra_draws
+        noisy_image = make_noisy_image_from_3D_distributed(obj, weights, noise, imghp.noise_type, php, imghp)
+        result = reconstruct_Tmap_and_zmap_distributed(noisy_image, weights, α, β, jhp; objective_scale = :auto)
+        plot_reconstruction_results(obj, result.object_opt;
+            extra_title = "$name | initial state: α = $α, β = $β", savefile = "$(run_folder)/reconstruction_initial_$(name).png")
+    end
 
     out = train_outer_optimization_distributed(geoms, α, β, freqs, weights, driver_plans_PSF, PSF_zcoords, jhp, PSF_scale;
         run_folder = run_folder, datetime = datetime, verbose = verbose)
@@ -272,6 +298,13 @@ function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weigh
     plot_geoms(geoms_final_flat, php; savefile = "$(run_folder)/geoms_final.png")
     plot_reconstruction_results(test_object, result_final.object_opt;
         extra_title = "final state: α = $(out.α), β = $(out.β)", savefile = "$(run_folder)/reconstruction_final.png")
+
+    for (name, (obj, noise)) in extra_draws
+        noisy_image = make_noisy_image_from_3D_distributed(obj, weights, noise, imghp.noise_type, php, imghp)
+        result = reconstruct_Tmap_and_zmap_distributed(noisy_image, weights, out.α, out.β, jhp; objective_scale = :auto)
+        plot_reconstruction_results(obj, result.object_opt;
+            extra_title = "$name | final state: α = $(out.α), β = $(out.β)", savefile = "$(run_folder)/reconstruction_final_$(name).png")
+    end
 
     plot_geoms_comparison(geoms_init_flat, geoms_final_flat, php; savefile = "$(run_folder)/geoms_comparison.png")
 
