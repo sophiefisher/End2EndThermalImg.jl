@@ -66,12 +66,15 @@ parse_αβ_init(s) = s == "auto" ? :auto : parse(Float64, s)
 
     opthp = OptimizeHyperParams(
         geoms_init_type = "monochromatic",
-        maxeval = 2000,        # outer (geoms, α, β) iterations
+        maxeval = 1000,        # outer (geoms, α, β) iterations -- sized to fit xeon-p8's
+                                # 4-day-4-hour (100h) wall-clock limit: calibration (job 6237610,
+                                # same freq_order=40/PSF_zlen=9/noise=0.02 config) measured
+                                # ~290s/iteration steady-state, so 2000 would need ~161h (over
+                                # budget); 1000 needs ~80.6h, leaving headroom for the one-time
+                                # alpha/beta resolution and the initial/final reconstruction passes
         learning_rate = 1e-3,
-        save_every = 50        # checkpoint interval -- 40 checkpoints over the run; xeon-p8's
-                                # 4-day-4-hour time limit gives plenty of margin at this cadence,
-                                # so this is sized for convergence-monitoring granularity, not
-                                # minimizing lost work from a timeout
+        save_every = 25        # checkpoint interval -- 40 checkpoints over the run, same cadence
+                                # as before scaling maxeval down
     )
 
     rechp = ReconstructionHyperParams(
