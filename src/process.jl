@@ -19,7 +19,7 @@ function plot_geoms(geoms_flat, php; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = 
     return fig, ax
 end
 
-function plot_geoms_comparison(geoms_init_flat, geoms_final_flat, php; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y, fontsize = DEFAULT_FONTSIZE, cmap = ColorMap(colorschemes[:grays].colors), savefile = "")
+function plot_geoms_comparison(geoms_init_flat, geoms_final_flat, php; figsize_x = DEFAULT_FIGSIZE_X, figsize_y = DEFAULT_FIGSIZE_Y, fontsize = DEFAULT_FONTSIZE, cmap = ColorMap(colorschemes[:grays].colors), savefile = "", final_label = "final")
     geoms_init = unflatten_square_matrix(geoms_init_flat)
     geoms_final = unflatten_square_matrix(geoms_final_flat)
     matplotlib.rcParams["font.size"] = fontsize
@@ -29,7 +29,7 @@ function plot_geoms_comparison(geoms_init_flat, geoms_final_flat, php; figsize_x
     # physically-meaningful scale for free (plot_geoms uses the same bounds), so there's no
     # separate "shared across initial/final" computation needed here.
     im = nothing
-    for (ax, geoms, title) in ((axes[0], geoms_init, "initial"), (axes[1], geoms_final, "final"))
+    for (ax, geoms, title) in ((axes[0], geoms_init, "initial"), (axes[1], geoms_final, final_label))
         im = ax.imshow(geoms, cmap=cmap, vmin=php.pillar_width_lb, vmax=php.pillar_width_ub)
         ax.set_title(title, fontsize=fontsize)
         ax.axis("off")

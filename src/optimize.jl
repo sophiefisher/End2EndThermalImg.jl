@@ -324,3 +324,90 @@ function run_and_save_outer_optimization_distributed(geoms, α, β, freqs, weigh
 
     (; results_file, run_folder, geoms = out.geoms, α = out.α, β = out.β, history = out.history)
 end
+
+# Loads a checkpoint written by save_optimization_state (either a periodic mid-run save or a true
+# final save) -- everything save_checkpoint_report (below) needs to regenerate the "final"-equivalent
+# comparison artifacts for a run that was cancelled/timed out before reaching opthp.maxeval. Mirrors
+# load_geoms (src/inversedesign.jl)'s JLD2.load pattern.
+function load_checkpoint_state(run_folder)
+    saved = JLD2.load(joinpath(run_folder, "results.jld2"))
+    (;
+        php = saved["php"], imghp = saved["imghp"], opthp = saved["opthp"], rechp = saved["rechp"],
+        PSF_scale = saved["PSF_scale"],
+        geoms_init_flat = saved["geoms_init_flat"], geoms_opt_flat = saved["geoms_opt_flat"],
+        α_opt = saved["α_opt"], β_opt = saved["β_opt"],
+        history = saved["history"]
+    )
+end
+
+# Regenerates the initial-vs-checkpoint comparison artifacts (geoms_comparison, PSFs, reconstruction)
+# from a checkpoint, for a run that was cancelled/timed out before reaching opthp.maxeval and so
+# never reached the real final-state block in run_and_save_outer_optimization_distributed above.
+# Named "checkpoint" throughout (not "final"), since this genuinely isn't the optimization's final
+# state -- just the latest one that was saved. geoms_final.png itself is NOT regenerated here: it
+# would be byte-for-byte the same plot as the existing geoms_checkpoint.png (both are exactly
+# plot_geoms(geoms_opt_flat, php)), so that file already serves as its own "final" counterpart.
+#
+# test_object/test_noise and each extra_test_objects draw are reproduced via the same with_tuning_rng
+# calls run_and_save_outer_optimization_distributed uses above, so as long as php/imghp match the
+# original run (true here, since both are loaded from that run's own results.jld2), these are
+# bit-for-bit the same draws used for that run's reconstruction_initial*.png -- this just extends the
+# same initial-vs-X comparison to a third point (the checkpoint) rather than drawing fresh objects.
+# extra_test_objects must be reconstructed by the caller the same way endtoend_opt.jl does (from
+# imghp.object_type's own Tlb/Tub/zlb_μm/zub_μm) -- not saved in results.jld2 since it's cheap and
+# deterministic to rebuild from php/imghp plus the objdata/ files already on disk.
+#
+# PSFs for geoms_init_flat are recomputed transiently purely to get a vmin/vmax shared with the
+# checkpoint's own PSFs (matching the original run's PSFs_initial/PSFs_final shared scale) -- not
+# re-saved, since the run's own PSFs_initial.png already exists untouched from early in the run.
+function save_checkpoint_report(run_folder, iteration, geoms_init_flat, geoms_opt_flat, α_opt, β_opt,
+        freqs, weights, driver_plans_PSF, PSF_zcoords, jhp::JobHyperParams, PSF_scale;
+        extra_test_objects::Vector{<:Pair{String, <:AbstractObjectType}} = Pair{String, AbstractObjectType}[],
+        verbose = true)
+    @unpack php, imghp = jhp
+
+    test_object, test_noise = with_tuning_rng(php, imghp) do
+        (get_object(imghp), generate_noise(imghp))
+    end
+    extra_draws = [name => with_tuning_rng(php, imghp, name) do
+                       (get_object(object_type, imghp), generate_noise(imghp))
+                   end
+                   for (name, object_type) in extra_test_objects]
+
+    verbose && @info "Computing checkpoint geoms/PSFs/reconstruction comparison artifacts" iteration
+
+    geoms_init = unflatten_square_matrix(geoms_init_flat)
+    geoms_opt = unflatten_square_matrix(geoms_opt_flat)
+
+    # order matters: gather_PSFs_distributed leaves resident fftPSFs state synced to whichever
+    # geoms it was last called with (see its own docstring), and the reconstructions below need
+    # that state to be geoms_opt's -- so geoms_init's PSFs (needed only for the vmin/vmax below)
+    # must be gathered first, geoms_opt's last.
+    PSFs_initial = gather_PSFs_distributed(geoms_init, freqs, php, imghp, PSF_scale, driver_plans_PSF, PSF_zcoords)
+    PSFs_checkpoint = gather_PSFs_distributed(geoms_opt, freqs, php, imghp, PSF_scale, driver_plans_PSF, PSF_zcoords)
+
+    noisy_image = make_noisy_image_from_3D_distributed(test_object, weights, test_noise, imghp.noise_type, php, imghp)
+    result = reconstruct_Tmap_and_zmap_distributed(noisy_image, weights, α_opt, β_opt, jhp; objective_scale = :auto)
+    image_opt = make_image_from_3D_distributed(result.object_opt, weights, php, imghp)
+    plot_reconstruction_results(test_object, result.object_opt, noisy_image, image_opt;
+        extra_title = "checkpoint @ iteration $iteration: α = $α_opt, β = $β_opt", savefile = "$(run_folder)/reconstruction_checkpoint.png")
+
+    for (name, (obj, noise)) in extra_draws
+        noisy_image = make_noisy_image_from_3D_distributed(obj, weights, noise, imghp.noise_type, php, imghp)
+        result = reconstruct_Tmap_and_zmap_distributed(noisy_image, weights, α_opt, β_opt, jhp; objective_scale = :auto)
+        image_opt = make_image_from_3D_distributed(result.object_opt, weights, php, imghp)
+        plot_reconstruction_results(obj, result.object_opt, noisy_image, image_opt;
+            extra_title = "$name | checkpoint @ iteration $iteration: α = $α_opt, β = $β_opt", savefile = "$(run_folder)/reconstruction_checkpoint_$(name).png")
+    end
+
+    plot_geoms_comparison(geoms_init_flat, geoms_opt_flat, php;
+        final_label = "checkpoint (iteration $iteration)", savefile = "$(run_folder)/geoms_comparison_checkpoint.png")
+
+    PSF_vmin = minimum(minimum(minimum.(PSFs)) for PSFs in (PSFs_initial, PSFs_checkpoint))
+    PSF_vmax = maximum(maximum(maximum.(PSFs)) for PSFs in (PSFs_initial, PSFs_checkpoint))
+    plot_PSFs_grid(PSFs_checkpoint, PSF_zcoords, freqs; vmin = PSF_vmin, vmax = PSF_vmax,
+        extra_title = "checkpoint @ iteration $iteration", savefile = "$(run_folder)/PSFs_checkpoint.png")
+
+    verbose && @info "Saved checkpoint report" run_folder iteration
+    nothing
+end
