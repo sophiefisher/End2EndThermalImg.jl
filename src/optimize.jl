@@ -357,9 +357,14 @@ end
 # imghp.object_type's own Tlb/Tub/zlb_μm/zub_μm) -- not saved in results.jld2 since it's cheap and
 # deterministic to rebuild from php/imghp plus the objdata/ files already on disk.
 #
-# PSFs for geoms_init_flat are recomputed transiently purely to get a vmin/vmax shared with the
-# checkpoint's own PSFs (matching the original run's PSFs_initial/PSFs_final shared scale) -- not
-# re-saved, since the run's own PSFs_initial.png already exists untouched from early in the run.
+# PSFs_initial.png IS (re)saved here, alongside PSFs_checkpoint.png -- despite its name, it is NOT
+# among the artifacts a timed-out/cancelled run already has: in run_and_save_outer_optimization_distributed
+# above, PSFs_initial's underlying data is gathered early (before training), but the PNG itself is
+# only written at the very end, together with PSFs_final.png, since both need a shared vmin/vmax --
+# so a run that dies before reaching that final block never gets PSFs_initial.png either, even
+# though geoms_initial.png/reconstruction_initial*.png (which have no such dependency) do exist.
+# Harmless to also run this against an already-completed run's folder: PSFs_initial.png would just
+# be overwritten with identical content, since it's a deterministic function of geoms_init_flat.
 function save_checkpoint_report(run_folder, iteration, geoms_init_flat, geoms_opt_flat, α_opt, β_opt,
         freqs, weights, driver_plans_PSF, PSF_zcoords, jhp::JobHyperParams, PSF_scale;
         extra_test_objects::Vector{<:Pair{String, <:AbstractObjectType}} = Pair{String, AbstractObjectType}[],
@@ -405,6 +410,8 @@ function save_checkpoint_report(run_folder, iteration, geoms_init_flat, geoms_op
 
     PSF_vmin = minimum(minimum(minimum.(PSFs)) for PSFs in (PSFs_initial, PSFs_checkpoint))
     PSF_vmax = maximum(maximum(maximum.(PSFs)) for PSFs in (PSFs_initial, PSFs_checkpoint))
+    plot_PSFs_grid(PSFs_initial, PSF_zcoords, freqs; vmin = PSF_vmin, vmax = PSF_vmax,
+        extra_title = "initial", savefile = "$(run_folder)/PSFs_initial.png")
     plot_PSFs_grid(PSFs_checkpoint, PSF_zcoords, freqs; vmin = PSF_vmin, vmax = PSF_vmax,
         extra_title = "checkpoint @ iteration $iteration", savefile = "$(run_folder)/PSFs_checkpoint.png")
 
