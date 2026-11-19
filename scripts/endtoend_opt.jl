@@ -84,8 +84,11 @@ parse_αβ_init(s) = s == "auto" ? :auto : parse(Float64, s)
         algorithm = :LD_LBFGS,
         α_init = $(QuoteNode(α_init)),
         β_init = $(QuoteNode(β_init)),
-        maxeval = 2000,
-        xtol_rel = 0.0,
+        maxeval = 2000,        # safety ceiling, not the thing driving convergence -- see xtol_rel
+        xtol_rel = 1e-5,        # convergence_studies/xtol_rel_2026-11-18T17:30:44.528: L plateaus
+                                # from 1e-4 on (both initial- and checkpoint-geoms states), so 1e-5
+                                # matches the fully-converged L to 3-4 sig figs while needing only
+                                # ~620-715 iterations instead of up to 2000 (~3x fewer)
         ftol_rel = 0.0,
         ftol_abs = 0.0,
         php = php
