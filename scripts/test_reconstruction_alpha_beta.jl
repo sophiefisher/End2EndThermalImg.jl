@@ -89,8 +89,12 @@ with_xtol_rel(rechp, xtol_rel; maxeval = rechp.maxeval) = ReconstructionHyperPar
 rechp_test = with_xtol_rel(rechp, 1e-5; maxeval = 2000)
 jhp_test = JobHyperParams(jhp; rechp = rechp_test)
 
-alphas = [0.0, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3]
-betas = [0.0, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3]
+# Overridable via E2E_ALPHAS/E2E_BETAS (comma-separated), e.g. for a finer/narrower follow-up
+# sweep without duplicating this whole script -- same parsing style as endtoend_opt.jl's
+# E2E_ALPHA_INIT/E2E_BETA_INIT. Defaults to the original 8x8 grid.
+parse_float_list(s) = parse.(Float64, split(s, ","))
+alphas = haskey(ENV, "E2E_ALPHAS") ? parse_float_list(ENV["E2E_ALPHAS"]) : [0.0, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3]
+betas = haskey(ENV, "E2E_BETAS") ? parse_float_list(ENV["E2E_BETAS"]) : [0.0, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3]
 
 println("\n--- running (α, β) sweep: ", length(alphas), " x ", length(betas), " = ", length(alphas) * length(betas), " pairs ---")
 summary_rows = NamedTuple[]
