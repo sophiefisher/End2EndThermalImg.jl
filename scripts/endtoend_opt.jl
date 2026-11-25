@@ -22,13 +22,19 @@ println("threads per worker = ", [remotecall_fetch(Threads.nthreads, p) for p in
 # from scripts/frequency_order_convergence.jl and scripts/psf_zlen_convergence.jl's sweeps) rather
 # than those files' own (20/3) -- not yet ported back to either of those.
 #
-# α_init/β_init default to :auto (resolve_initial_α_β runs first, see src/tune_regularization.jl)
-# -- override both via E2E_ALPHA_INIT/E2E_BETA_INIT env vars to fix them at a literal value
-# instead and skip that resolution step, e.g.:
-#   sbatch --export=ALL,E2E_ALPHA_INIT=1e-7,E2E_BETA_INIT=1e-7 cluster_scripts/run_endtoend_opt.sh
+# α_init/β_init default to literal values rather than :auto (which would run
+# resolve_initial_α_β -- see src/tune_regularization.jl -- before the main optimization). That
+# resolver is a local, unconstrained, single-starting-point (α_start=β_start=1e-7) LD_LBFGS search,
+# and a direct (α, β) sweep over the monochromatic-lens initial geoms (scripts/test_reconstruction_alpha_beta.jl,
+# progressively narrowed across several convergence_studies/alpha_beta_sweep_* runs, most recently
+# convergence_studies/alpha_beta_sweep_2026-11-24T19:31:35.328) found it was getting stuck near its
+# own starting point: the real optimum is at β=1e-12, five orders of magnitude below what the
+# resolver found, with α=1e-7 confirmed to remain optimal across every sweep. Still overridable via
+# E2E_ALPHA_INIT/E2E_BETA_INIT env vars (including back to "auto") without editing this file, e.g.:
+#   sbatch --export=ALL,E2E_ALPHA_INIT=1e-7,E2E_BETA_INIT=1e-12 cluster_scripts/run_endtoend_opt.sh
 parse_αβ_init(s) = s == "auto" ? :auto : parse(Float64, s)
-α_init = parse_αβ_init(get(ENV, "E2E_ALPHA_INIT", "auto"))
-β_init = parse_αβ_init(get(ENV, "E2E_BETA_INIT", "auto"))
+α_init = parse_αβ_init(get(ENV, "E2E_ALPHA_INIT", "1e-7"))
+β_init = parse_αβ_init(get(ENV, "E2E_BETA_INIT", "1e-12"))
 
 @everywhere begin
     php = PhysicsHyperParams(
@@ -66,12 +72,25 @@ parse_αβ_init(s) = s == "auto" ? :auto : parse(Float64, s)
 
     opthp = OptimizeHyperParams(
         geoms_init_type = "monochromatic",
-        maxeval = 1000,        # outer (geoms, α, β) iterations -- sized to fit xeon-p8's
-                                # 4-day-4-hour (100h) wall-clock limit: calibration (job 6237610,
-                                # same freq_order=40/PSF_zlen=9/noise=0.02 config) measured
-                                # ~290s/iteration steady-state, so 2000 would need ~161h (over
-                                # budget); 1000 needs ~80.6h, leaving headroom for the one-time
-                                # alpha/beta resolution and the initial/final reconstruction passes
+        maxeval = 1000,        # outer (geoms, α, β) iterations. An earlier calibration (job
+                                # 6237610) estimated ~290s/iteration, but the actual production run
+                                # at that estimate (job 6238983, :auto-resolved α/β stuck near
+                                # 1e-7/1e-7, xtol_rel=0) measured ~1800s/iteration and TIMEOUT'd at
+                                # iteration 150/1000 on xeon-p8's 100h limit -- the resolved α/β
+                                # landed in a regime that mostly hit MAXEVAL_REACHED on the inner
+                                # reconstruction rather than converging. Both root causes are fixed
+                                # now (xtol_rel=1e-5 above; α/β fixed directly at 1e-7/1e-12 instead
+                                # of :auto, see below), and a single inner reconstruction at that
+                                # exact (α, β) with xtol_rel=1e-5 took ~500s in
+                                # convergence_studies/alpha_beta_sweep_2026-11-24T19:31:35.328 (vs.
+                                # routinely hitting the full 2000-iteration ceiling before) -- but
+                                # per-outer-iteration cost (that reconstruction plus the
+                                # Hessian/adjoint solve) hasn't been directly recalibrated under
+                                # these settings, so there's no verified guarantee 1000 iterations
+                                # fits in 100h. Left at 1000 anyway, since a TIMEOUT is not a failure
+                                # here -- scripts/checkpoint_report.jl regenerates the usual
+                                # final-state report from whichever checkpoint was last saved
+                                # (save_every below).
         learning_rate = 1e-3,
         save_every = 25        # checkpoint interval -- 40 checkpoints over the run, same cadence
                                 # as before scaling maxeval down
